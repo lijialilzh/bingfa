@@ -389,14 +389,17 @@ class TestEngine:
                     st.all_frames_ms = (time.perf_counter() - t1) * 1000
                     break
                 await asyncio.sleep(0.2)
-            # 超时未加载完：记录已加载帧数，all_frames_ms 保持 0
-            if st.all_frames_ms == 0.0 and st.frames_loaded > 0:
-                st.all_frames_ms = (time.perf_counter() - t1) * 1000
-            st.status = "done"
+
+            # 区分：真正加载完 vs 超时未加载完
+            if st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+                st.status = "done"          # 真正加载完
+            else:
+                st.status = "timeout"       # 超时未加载完
             self.emit({"type": "user_done", "user_id": user_id,
                        "account": account, "frames_loaded": st.frames_loaded,
                        "total_frames": st.total_frames,
                        "all_frames_ms": st.all_frames_ms,
+                       "status": st.status,
                        "ts": time.time()})
         except Exception as e:
             st.status = "error"

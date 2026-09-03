@@ -80,14 +80,15 @@
   .user-cell.viewer { background: #3b2f1e; border-color: var(--yellow); }
   .user-cell.loading { background: #1e3a5f; border-color: var(--cyan); }
   .user-cell.done { background: #0f2e1a; border-color: var(--green); }
+  .user-cell.timeout { background: #3b2f1e; border-color: var(--yellow); }
   .user-cell.error { background: #3a1515; border-color: var(--red); }
 
   .user-cell .bar {
-    height: 4px; background: #0b1220; border-radius: 2px;
+    height: 6px; background: #334155; border-radius: 3px;
     margin: 4px 2px 2px; overflow: hidden;
   }
   .user-cell .bar-fill {
-    height: 100%; background: var(--cyan); border-radius: 2px;
+    height: 100%; background: var(--blue); border-radius: 3px;
     transition: width 0.3s;
   }
   .user-cell.done .bar-fill { background: var(--green); }
@@ -193,7 +194,8 @@
     <div class="stat"><div class="num green" id="sLogin">0</div><div class="lbl">登录成功</div></div>
     <div class="stat"><div class="num cyan" id="sViewer">0</div><div class="lbl">进入阅片</div></div>
     <div class="stat"><div class="num yellow" id="sLoading">0</div><div class="lbl">加载中</div></div>
-    <div class="stat"><div class="num" id="sDone">0</div><div class="lbl">已完成</div></div>
+    <div class="stat"><div class="num" id="sDone">0</div><div class="lbl">加载完成</div></div>
+    <div class="stat"><div class="num yellow" id="sTimeout">0</div><div class="lbl">超时未完成</div></div>
     <div class="stat"><div class="num red" id="sError">0</div><div class="lbl">出错</div></div>
     <div class="stat"><div class="num" id="sAvgLogin">-</div><div class="lbl">平均登录(ms)</div></div>
     <div class="stat"><div class="num" id="sAvgViewer">-</div><div class="lbl">平均阅片页(ms)</div></div>
@@ -279,7 +281,7 @@ function handleEvent(ev) {
       u.frames = ev.frames_loaded;
       u.total_frames = ev.total_frames || 0;
       u.all_frames_ms = ev.all_frames_ms || 0;
-      u.status = "done";
+      u.status = ev.status || "done";
       renderUsers();
     }
   }
@@ -372,14 +374,14 @@ function renderUsers() {
   const grid = document.getElementById("usersGrid");
   grid.innerHTML = "";
   const statusText = { pending: "等待", login: "登录中", viewer: "进入阅片",
-    loading: "加载图像", done: "完成", error: "出错" };
+    loading: "加载图像", done: "完成", timeout: "超时未完成", error: "出错" };
   for (const u of users) {
     const cell = document.createElement("div");
     cell.className = "user-cell " + u.status;
 
     // 图像加载进度条
     let progress = "";
-    if (u.status === "loading" || u.status === "done") {
+    if (u.status === "loading" || u.status === "done" || u.status === "timeout") {
       const total = u.total_frames || 0;
       const pct = total > 0 ? Math.min(100, Math.round(u.frames / total * 100)) : 0;
       progress = `
@@ -405,6 +407,7 @@ function updateStats() {
   const viewer = users.filter(u => u.viewer_ms > 0).length;
   const loading = users.filter(u => u.status === "loading").length;
   const done = users.filter(u => u.status === "done").length;
+  const timeout = users.filter(u => u.status === "timeout").length;
   const err = users.filter(u => u.status === "error").length;
   const loginMs = users.filter(u => u.login_ms > 0).map(u => u.login_ms);
   const viewerMs = users.filter(u => u.viewer_ms > 0).map(u => u.viewer_ms);
@@ -415,6 +418,7 @@ function updateStats() {
   document.getElementById("sViewer").textContent = viewer;
   document.getElementById("sLoading").textContent = loading;
   document.getElementById("sDone").textContent = done;
+  document.getElementById("sTimeout").textContent = timeout;
   document.getElementById("sError").textContent = err;
   document.getElementById("sAvgLogin").textContent =
     loginMs.length ? Math.round(avg(loginMs)) : "-";
