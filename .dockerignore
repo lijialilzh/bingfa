@@ -1,0 +1,7 @@
+.venv
+__pycache__
+*.pyc
+result.json
+部署说明.md
+Docker部署说明.md
+.git

@@ -1,0 +1,109 @@
+{
+  "total_ms": 26365.919250063598,
+  "users": 10,
+  "login_ok": 10,
+  "viewer_ok": 10,
+  "errors": 0,
+  "results": [
+    {
+      "user_id": 0,
+      "login_ok": true,
+      "login_ms": 5362.5,
+      "viewer_ok": true,
+      "viewer_ms": 10149.3,
+      "frames_loaded": 76,
+      "first_frame_ms": 10450.4,
+      "error": ""
+    },
+    {
+      "user_id": 1,
+      "login_ok": true,
+      "login_ms": 5365.2,
+      "viewer_ok": true,
+      "viewer_ms": 10152.6,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 2,
+      "login_ok": true,
+      "login_ms": 5345.1,
+      "viewer_ok": true,
+      "viewer_ms": 9838.9,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 3,
+      "login_ok": true,
+      "login_ms": 5360.4,
+      "viewer_ok": true,
+      "viewer_ms": 10161.9,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 4,
+      "login_ok": true,
+      "login_ms": 5364.3,
+      "viewer_ok": true,
+      "viewer_ms": 9805.5,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 5,
+      "login_ok": true,
+      "login_ms": 5362.1,
+      "viewer_ok": true,
+      "viewer_ms": 8487.6,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 6,
+      "login_ok": true,
+      "login_ms": 5350.7,
+      "viewer_ok": true,
+      "viewer_ms": 8358.1,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 7,
+      "login_ok": true,
+      "login_ms": 5044.6,
+      "viewer_ok": true,
+      "viewer_ms": 10161.6,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 8,
+      "login_ok": true,
+      "login_ms": 5342.5,
+      "viewer_ok": true,
+      "viewer_ms": 10158.4,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    },
+    {
+      "user_id": 9,
+      "login_ok": true,
+      "login_ms": 5167.0,
+      "viewer_ok": true,
+      "viewer_ms": 10159.0,
+      "frames_loaded": 0,
+      "first_frame_ms": 0.0,
+      "error": ""
+    }
+  ]
+}
