@@ -10,6 +10,7 @@ import asyncio
 import json
 import threading
 from pathlib import Path
+from typing import Optional, Set, List, Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
@@ -19,10 +20,10 @@ from engine import TestEngine, DEFAULT_CONFIG, parse_accounts
 app = FastAPI(title="阅片并发测试")
 
 # 全局状态
-engine: TestEngine | None = None
-engine_task: asyncio.Task | None = None
-clients: set[WebSocket] = set()
-event_log: list[dict] = []          # 保留最近事件用于回放
+engine: Optional[TestEngine] = None
+engine_task: Optional[asyncio.Task] = None
+clients: Set[WebSocket] = set()
+event_log: List[dict] = []          # 保留最近事件用于回放
 MAX_LOG = 5000
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
