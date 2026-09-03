@@ -186,6 +186,7 @@
     <input id="observe" type="number" value="60" min="10" max="300">
     <button id="btnStart" onclick="startTest()">开始测试</button>
     <button id="btnStop" class="stop" onclick="stopTest()" disabled>停止</button>
+    <button class="btn2" onclick="clearLog()">清空日志</button>
     <span id="runState" style="font-size:13px;color:var(--muted)">空闲</span>
   </div>
 
@@ -389,14 +390,16 @@ function renderUsers() {
         <div class="st">${u.frames}/${total || "?"} 帧 (${pct}%)</div>`;
     }
 
-    // 阶段耗时
+    // 阶段耗时（按时间先后顺序：登录 → 页面 → 图像）
     let timing = "";
     if (u.login_ms > 0) timing += `<div class="st">登录 ${Math.round(u.login_ms)}ms</div>`;
     if (u.viewer_ms > 0) timing += `<div class="st">页面 ${Math.round(u.viewer_ms)}ms</div>`;
     if (u.all_frames_ms > 0) timing += `<div class="st">图像 ${Math.round(u.all_frames_ms)}ms</div>`;
 
+    // 显示顺序：账号 → 已完成阶段耗时 → 当前状态 → 进度条
     cell.innerHTML = `<div class="acct">${u.account}</div>
-      <div class="st">${statusText[u.status] || u.status}</div>${progress}${timing}`;
+      ${timing}
+      <div class="st">${statusText[u.status] || u.status}</div>${progress}`;
     grid.appendChild(cell);
   }
 }
@@ -533,6 +536,20 @@ async function startTest() {
 
 async function stopTest() {
   await fetch("/api/stop", { method: "POST" });
+}
+
+async function clearLog() {
+  await fetch("/api/clear", { method: "POST" });
+  // 清空前端显示
+  document.getElementById("log").innerHTML = "";
+  document.getElementById("summaryBody").innerHTML = "";
+  document.getElementById("evidence").innerHTML = "测试完成后显示";
+  users = [];
+  framesTotal = 0;
+  logCount = 0;
+  renderUsers();
+  updateStats();
+  addLog("info", "日志已清空");
 }
 
 connect();

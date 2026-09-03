@@ -146,6 +146,13 @@ async def status() -> dict:
     return {"running": running, "events": len(event_log)}
 
 
+@app.post("/api/clear")
+async def clear_log() -> dict:
+    """清空历史事件日志。"""
+    event_log.clear()
+    return {"ok": True, "msg": "日志已清空"}
+
+
 @app.get("/api/report")
 async def report() -> dict:
     """生成可审计报告：每个用户的账号、独立会话 token、精确时间戳。"""
