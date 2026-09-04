@@ -8,9 +8,10 @@ if lsof -ti:9000 >/dev/null 2>&1; then
   sleep 1
 fi
 
-# 后台启动新进程，日志写入 server.log
-nohup .venv/bin/python server.py > server.log 2>&1 &
+# 后台启动新进程，完全脱离终端（stdin/stdout/stderr 全部重定向）
+nohup .venv/bin/python server.py < /dev/null > server.log 2>&1 &
 PID=$!
+disown "$PID" 2>/dev/null
 
 sleep 2
 if kill -0 "$PID" 2>/dev/null; then
