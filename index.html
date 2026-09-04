@@ -328,12 +328,17 @@ async function loadEvidence() {
   const data = await res.json();
   if (!data.ok) return;
   const el = document.getElementById("evidence");
-  el.innerHTML = `
-    <div style="margin-bottom:8px">
-      <b>用户总数：</b>${data.users} &nbsp;&nbsp;
+  const isFrameOnly = data.mode === "frame_only";
+  let sessionHtml = "";
+  if (isFrameOnly) {
+    sessionHtml = `<b>测试模式：</b>图像加载测试（不登录，无会话 token）`;
+  } else {
+    sessionHtml = `<b>用户总数：</b>${data.users} &nbsp;&nbsp;
       <b>独立会话 token 数：</b>${data.unique_tokens}
-      ${data.unique_tokens === data.users ? '（每个用户一个独立会话 ✅）' : '（⚠️ 存在重复会话）'}
-    </div>
+      ${data.unique_tokens === data.users ? '（每个用户一个独立会话 ✅）' : '（⚠️ 存在重复会话）'}`;
+  }
+  el.innerHTML = `
+    <div style="margin-bottom:8px">${sessionHtml}</div>
     <div style="margin-bottom:8px">
       <b>登录时间戳极差：</b>${data.login_spread_seconds} 秒 &nbsp;&nbsp;
       <b>进入阅片时间戳极差：</b>${data.viewer_spread_seconds} 秒 &nbsp;&nbsp;

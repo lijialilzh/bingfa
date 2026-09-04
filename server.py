@@ -175,6 +175,7 @@ async def report() -> dict:
     return {
         "ok": True,
         "users": len(states),
+        "mode": getattr(engine, "mode", "full"),
         "unique_tokens": len(set(tokens)),
         "login_spread_seconds": spread(login_ts),
         "viewer_spread_seconds": spread(viewer_ts),
