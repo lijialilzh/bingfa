@@ -250,16 +250,19 @@ function connect() {
 
 function handleEvent(ev) {
   if (ev.type === "start") {
+    const totalFrames = ev.total_frames || 0;
     users = ev.accounts.map((a, i) => ({
       id: i, account: a, status: "pending", login_ms: 0, viewer_ms: 0,
-      first_frame_ms: 0, all_frames_ms: 0, frames: 0, total_frames: 0, error: ""
+      first_frame_ms: 0, all_frames_ms: 0, frames: 0,
+      total_frames: totalFrames, error: ""
     }));
     framesTotal = 0;
     logCount = 0;
     document.getElementById("log").innerHTML = "";
     document.getElementById("summaryBody").innerHTML = "";
     renderUsers();
-    addLog("info", `测试启动：${ev.users} 个用户`);
+    addLog("info", `测试启动：${ev.users} 个用户` +
+      (totalFrames ? `，共 ${totalFrames} 帧` : ""));
     setRunning(true);
   }
   else if (ev.type === "progress") {
