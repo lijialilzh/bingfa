@@ -4,6 +4,8 @@
   "viewer_path_template": "/app/txzq/view/{study_uid}",
   "password": "123qwe",
   "study_uid": "1.3.46.670589.28.68172260368172520200518000449629596",
+  "series_uid": "1.3.46.670589.28.681722603681725.20200518010931497060.2.2",
+  "product": "XA_BRAIN",
   "accounts": [
     "test",
     "test2",

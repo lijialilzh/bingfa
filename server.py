@@ -91,10 +91,10 @@ async def get_config() -> dict:
 @app.post("/api/config")
 async def set_config(payload: dict) -> dict:
     """保存配置。payload 可含 base_url/login_path/viewer_path_template/
-    password/study_uid/accounts(列表) 或 accounts_text(文本)。"""
+    password/study_uid/series_uid/accounts(列表) 或 accounts_text(文本)。"""
     cfg = load_config()
     for key in ("base_url", "login_path", "viewer_path_template",
-                "password", "study_uid"):
+                "password", "study_uid", "series_uid", "product"):
         if key in payload and payload[key] is not None:
             cfg[key] = str(payload[key]).strip()
 
@@ -117,6 +117,7 @@ async def start_test(payload: dict) -> dict:
 
     users = int(payload.get("users", 100))
     observe = float(payload.get("observe", 15))
+    mode = payload.get("mode", "full")
     event_log.clear()
 
     # 优先用请求里带的配置，否则用已保存配置
@@ -127,9 +128,10 @@ async def start_test(payload: dict) -> dict:
             cfg["accounts"] = parse_accounts(payload["config"]["accounts_text"])
 
     engine = TestEngine(users=users, observe_seconds=observe,
-                        emit=broadcast, config=cfg)
+                        emit=broadcast, config=cfg, mode=mode)
     engine_task = asyncio.create_task(engine.run())
-    return {"ok": True, "msg": f"已启动 {users} 用户并发测试"}
+    label = "图像帧接口" if mode == "frame_only" else "全部接口"
+    return {"ok": True, "msg": f"已启动 {users} 用户并发测试（{label}）"}
 
 
 @app.post("/api/stop")

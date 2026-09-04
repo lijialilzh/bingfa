@@ -1,7 +1,14 @@
 #!/usr/bin/env python3
 """
-并发测试引擎：100 个不同账号，每个账号独立浏览器上下文（模拟不同笔记本 + Chrome），
-同时登录 -> 同时进入图像工作站阅片 -> 加载图像帧。
+并发测试引擎，支持两种模式：
+
+  mode="full"       全部接口测试：每个账号独立浏览器上下文（模拟不同笔记本 + Chrome），
+                    同时登录 -> 同时进入图像工作站阅片 -> 加载图像帧。
+                    覆盖接口：登录、会话校验、图像元数据、序列数据、缩略图、图像帧、消息令牌。
+
+  mode="frame_only" 过滤其他接口，只压测「图像帧」接口：
+                    GET /xa_brain_encrypt/XA-00001/{study_uid}/{series_uid}/{sop_instance_uid}
+                    （dcp 仅在准备阶段调用一次，用于获取帧列表，不计入测试。）
 
 通过事件队列把每个用户的请求过程实时推送给 Web 服务。
 """
@@ -25,6 +32,8 @@ DEFAULT_CONFIG = {
     "viewer_path_template": "/app/txzq/view/{study_uid}",
     "password": "123qwe",
     "study_uid": "1.3.46.670589.28.68172260368172520200518000449629596",
+    "series_uid": "1.3.46.670589.28.681722603681725.20200518010931497060.2.2",
+    "product": "XA_BRAIN",
     "accounts": ["test"] + [f"test{i}" for i in range(2, 101)],
 }
 
@@ -38,6 +47,8 @@ API_TAGS = [
     ("/RESULT/thumbnail", "缩略图"),
     ("/api/v1/msg/token", "消息令牌"),
 ]
+
+FRAME_PREFIX = "/xa_brain_encrypt/"
 
 
 def tag_of(url: str) -> str:
@@ -169,7 +180,7 @@ def random_fingerprint() -> dict:
 class UserState:
     user_id: int
     account: str
-    status: str = "pending"          # pending/login/viewer/loading/done/error
+    status: str = "pending"          # pending/login/viewer/loading/done/error/timeout
     login_ms: float = 0.0
     viewer_ms: float = 0.0           # 阅片页 HTML 加载完成耗时
     first_frame_ms: float = 0.0      # 首帧出现耗时
@@ -186,13 +197,15 @@ class UserState:
 
 
 class TestEngine:
-    """负责并发执行，事件通过 emit 回调推送。"""
+    """负责并发执行，事件通过 emit 回调推送。mode 决定测试范围。"""
 
     def __init__(self, users: int, observe_seconds: float,
-                 emit: Callable[[dict], None], config: Optional[dict] = None):
+                 emit: Callable[[dict], None], config: Optional[dict] = None,
+                 mode: str = "full"):
         self.users = users
         self.observe_seconds = observe_seconds
         self.emit = emit
+        self.mode = mode
         self.states: dict[int, UserState] = {}
         self._stop = False
 
@@ -202,21 +215,32 @@ class TestEngine:
         self.viewer_url = self.base_url + cfg["viewer_path_template"].format(
             study_uid=cfg["study_uid"])
         self.default_password = cfg["password"]
+        self.study_uid = cfg["study_uid"]
+        self.series_uid = cfg.get("series_uid", "")
         # credentials: [{"account": str, "password": str|None}]
         self.credentials = parse_credentials(
             "\n".join(cfg.get("accounts", [])))
+        self.frame_urls: list[str] = []
 
     def stop(self) -> None:
         self._stop = True
 
     async def run(self) -> None:
+        if self.mode == "frame_only":
+            await self._run_frame_only()
+        else:
+            await self._run_full()
+
+    # ---------------- 模式1：全部接口测试 ----------------
+
+    async def _run_full(self) -> None:
         creds = self.credentials[: self.users]
         accounts = [c["account"] for c in creds]
         self.states = {i: UserState(user_id=i, account=accounts[i])
                        for i in range(self.users)}
 
         self.emit({"type": "start", "users": self.users,
-                   "accounts": accounts, "ts": time.time()})
+                   "accounts": accounts, "mode": "full", "ts": time.time()})
 
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
@@ -241,7 +265,7 @@ class TestEngine:
             viewer_barrier = asyncio.Barrier(self.users)
 
             tasks = [
-                self._run_user(i, cred, ctx, login_barrier, viewer_barrier)
+                self._run_user_full(i, cred, ctx, login_barrier, viewer_barrier)
                 for i, cred, ctx in contexts
             ]
             await asyncio.gather(*tasks)
@@ -250,31 +274,9 @@ class TestEngine:
         self.emit({"type": "summary", "states": self._snapshot(),
                    "ts": time.time()})
 
-    def _snapshot(self) -> list[dict]:
-        return [
-            {
-                "user_id": s.user_id,
-                "account": s.account,
-                "status": s.status,
-                "login_ms": round(s.login_ms, 1),
-                "viewer_ms": round(s.viewer_ms, 1),
-                "first_frame_ms": round(s.first_frame_ms, 1),
-                "all_frames_ms": round(s.all_frames_ms, 1),
-                "frames_loaded": s.frames_loaded,
-                "total_frames": s.total_frames,
-                "session_token": s.session_token,
-                "user_id_server": s.user_id_server,
-                "login_ts": round(s.login_ts, 3),
-                "viewer_ts": round(s.viewer_ts, 3),
-                "first_frame_ts": round(s.first_frame_ts, 3),
-                "error": s.error,
-            }
-            for s in self.states.values()
-        ]
-
-    async def _run_user(self, user_id: int, cred: dict, context,
-                        login_barrier: asyncio.Barrier,
-                        viewer_barrier: asyncio.Barrier) -> None:
+    async def _run_user_full(self, user_id: int, cred: dict, context,
+                             login_barrier: asyncio.Barrier,
+                             viewer_barrier: asyncio.Barrier) -> None:
         st = self.states[user_id]
         account = cred["account"]
         # 密码：优先用账号自带密码，否则用默认密码；统一转 SHA256 哈希
@@ -285,7 +287,7 @@ class TestEngine:
         # 监听请求/响应，实时推送
         async def on_request(req):
             if any(p in req.url for p, _ in API_TAGS):
-                if "/xa_brain_encrypt/" in req.url:
+                if FRAME_PREFIX in req.url:
                     st.frames_loaded += 1
                     if st.first_frame_ts == 0.0:
                         st.first_frame_ts = time.time()
@@ -445,3 +447,120 @@ class TestEngine:
                 return True, token, str(uid or "")
         except Exception:
             return False, "", ""
+
+    # ---------------- 模式2：只压测图像帧接口 ----------------
+
+    async def _fetch_frame_urls(self) -> list[str]:
+        """准备阶段：从 dcp 接口获取全部帧 URL（仅调用一次，不计入测试）。"""
+        url = f"{self.base_url}/api/repacs/series/{self.series_uid}/dcp"
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.get(url)
+            data = resp.json()
+            images = data.get("images", [])
+            return [f"{self.base_url}/{img['storagePath']}" for img in images]
+
+    async def _run_frame_only(self) -> None:
+        self.emit({"type": "progress",
+                   "msg": "准备：获取图像帧列表 (dcp) ...", "ts": time.time()})
+        try:
+            self.frame_urls = await self._fetch_frame_urls()
+        except Exception as e:
+            self.emit({"type": "error",
+                       "msg": f"获取帧列表失败: {type(e).__name__}: {e}",
+                       "ts": time.time()})
+            return
+        total = len(self.frame_urls)
+        if total == 0:
+            self.emit({"type": "error", "msg": "未获取到图像帧",
+                       "ts": time.time()})
+            return
+
+        accounts = [f"user{i + 1}" for i in range(self.users)]
+        self.states = {
+            i: UserState(user_id=i, account=accounts[i], total_frames=total)
+            for i in range(self.users)
+        }
+        self.emit({"type": "start", "users": self.users, "accounts": accounts,
+                   "total_frames": total, "mode": "frame_only",
+                   "ts": time.time()})
+
+        tasks = [self._run_user_frame_only(i) for i in range(self.users)]
+        await asyncio.gather(*tasks)
+
+        self.emit({"type": "summary", "states": self._snapshot(),
+                   "ts": time.time()})
+
+    async def _run_user_frame_only(self, user_id: int) -> None:
+        st = self.states[user_id]
+        st.status = "loading"
+        self.emit({"type": "user_status", "user_id": user_id,
+                   "account": st.account, "status": "loading", "ts": time.time()})
+
+        t0 = time.perf_counter()
+        st.viewer_ts = time.time()
+        deadline = t0 + self.observe_seconds
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            for url in self.frame_urls:
+                if self._stop or time.perf_counter() > deadline:
+                    break
+                t_req = time.perf_counter()
+                try:
+                    resp = await client.get(url)
+                    ok = resp.status_code == 200
+                    if ok:
+                        st.frames_loaded += 1
+                        if st.first_frame_ts == 0.0:
+                            st.first_frame_ts = time.time()
+                            st.first_frame_ms = (t_req - t0) * 1000
+                    self.emit({"type": "request", "user_id": user_id,
+                               "account": st.account, "method": "GET",
+                               "url": url, "tag": "图像帧", "ts": time.time()})
+                    self.emit({"type": "response", "user_id": user_id,
+                               "account": st.account, "status": resp.status_code,
+                               "url": url, "tag": "图像帧", "ts": time.time()})
+                except Exception as e:
+                    self.emit({"type": "response", "user_id": user_id,
+                               "account": st.account, "status": 0,
+                               "url": url, "tag": "图像帧",
+                               "error": f"{type(e).__name__}: {e}",
+                               "ts": time.time()})
+                if st.frames_loaded >= st.total_frames:
+                    break
+
+        st.all_frames_ms = (time.perf_counter() - t0) * 1000
+        if st.frames_loaded >= st.total_frames:
+            st.status = "done"
+        else:
+            st.status = "timeout"
+        self.emit({"type": "user_done", "user_id": user_id,
+                   "account": st.account, "frames_loaded": st.frames_loaded,
+                   "total_frames": st.total_frames,
+                   "all_frames_ms": st.all_frames_ms,
+                   "status": st.status, "ts": time.time()})
+
+    # ---------------- 公共 ----------------
+
+    def _snapshot(self) -> list[dict]:
+        return [
+            {
+                "user_id": s.user_id,
+                "account": s.account,
+                "status": s.status,
+                "login_ms": round(s.login_ms, 1),
+                "viewer_ms": round(s.viewer_ms, 1),
+                "first_frame_ms": round(s.first_frame_ms, 1),
+                "all_frames_ms": round(s.all_frames_ms, 1),
+                "frames_loaded": s.frames_loaded,
+                "total_frames": s.total_frames,
+                "session_token": s.session_token,
+                "user_id_server": s.user_id_server,
+                "login_ts": round(s.login_ts, 3),
+                "viewer_ts": round(s.viewer_ts, 3),
+                "first_frame_ts": round(s.first_frame_ts, 3),
+                "error": s.error,
+            }
+            for s in self.states.values()
+        ]
+
+
