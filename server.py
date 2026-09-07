@@ -10,19 +10,31 @@ import asyncio
 import hashlib
 import io
 import json
+import secrets
 import threading
+import time
 from pathlib import Path
 from typing import Optional, Set, List, Dict
 
 import httpx
-from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from engine import TestEngine, DEFAULT_CONFIG, parse_accounts, to_password_hash
 from record import Recorder
 from ui_test import UITestRunner, parse_excel_cases
 
-app = FastAPI(title="阅片并发测试")
+app = FastAPI(title="测试平台")
+
+# ---- 登录认证 ----
+# 默认账号：master / Tuixiang2026
+AUTH_USERS = {
+    "master": "Tuixiang2026",
+}
+# 已登录的 token 集合（内存中，重启后失效）
+auth_tokens: Set[str] = set()
+TOKEN_TTL = 24 * 3600  # token 有效期 24 小时
+_token_created: Dict[str, float] = {}
 
 # 全局状态
 engine: Optional[TestEngine] = None
@@ -90,6 +102,61 @@ def broadcast(event: dict) -> None:
             dead.append(ws)
     for ws in dead:
         clients.discard(ws)
+
+
+# ---------------- 登录认证 ----------------
+
+def _check_token(token: str) -> bool:
+    """校验 token 是否有效。"""
+    if not token or token not in auth_tokens:
+        return False
+    created = _token_created.get(token, 0)
+    if time.time() - created > TOKEN_TTL:
+        auth_tokens.discard(token)
+        _token_created.pop(token, None)
+        return False
+    return True
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    """认证中间件：除登录接口和静态资源外，所有请求需携带有效 token。"""
+    path = request.url.path
+    # 放行登录接口和根路径（根路径返回登录页）
+    if path in ("/api/login", "/api/logout", "/") or path.startswith("/static"):
+        return await call_next(request)
+    # 检查 token（支持 header 或 query 参数）
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        token = request.query_params.get("token", "")
+    if not _check_token(token):
+        return JSONResponse({"ok": False, "msg": "未登录或登录已过期"},
+                            status_code=401)
+    return await call_next(request)
+
+
+@app.post("/api/login")
+async def login(payload: dict) -> dict:
+    """登录接口。payload: {username, password}"""
+    username = (payload.get("username") or "").strip()
+    password = payload.get("password") or ""
+    if username not in AUTH_USERS or AUTH_USERS[username] != password:
+        return {"ok": False, "msg": "用户名或密码错误"}
+    token = secrets.token_hex(32)
+    auth_tokens.add(token)
+    _token_created[token] = time.time()
+    return {"ok": True, "msg": "登录成功", "token": token, "username": username}
+
+
+@app.post("/api/logout")
+async def logout(request: Request) -> dict:
+    """登出接口。"""
+    token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
+    if not token:
+        token = request.query_params.get("token", "")
+    auth_tokens.discard(token)
+    _token_created.pop(token, None)
+    return {"ok": True, "msg": "已退出登录"}
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -571,6 +638,11 @@ async def auto_test_upload(file: UploadFile = File(...)) -> dict:
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
+    # 校验 token（query 参数）
+    token = ws.query_params.get("token", "")
+    if not _check_token(token):
+        await ws.close(code=4401)
+        return
     await ws.accept()
     clients.add(ws)
     # 回放历史事件
@@ -682,7 +754,7 @@ async def start_test(payload: dict) -> dict:
         return {"ok": False, "msg": "测试已在运行中"}
 
     users = int(payload.get("users", 20))
-    observe = float(payload.get("observe", 120))
+    observe = float(payload.get("observe", 300))
     mode = payload.get("mode", "full")
     event_log.clear()
 
@@ -974,4 +1046,4 @@ async def aggregate() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=9000, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=19000, log_level="warning")

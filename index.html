@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>阅片并发测试 - 可视化面板</title>
+<title>测试平台</title>
 <style>
   :root {
     --bg: #0f172a; --panel: #1e293b; --border: #334155;
@@ -314,19 +314,69 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   .toast.error { color: #fca5a5; }
+
+  /* ---- 登录页 ---- */
+  .login-mask {
+    position: fixed; inset: 0; background: var(--bg);
+    display: flex; align-items: center; justify-content: center; z-index: 3000;
+  }
+  .login-box {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 36px; width: 360px; max-width: 90vw;
+    text-align: center;
+  }
+  .login-box h1 { font-size: 22px; margin-bottom: 4px; }
+  .login-box .login-sub { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+  .login-box .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; text-align: left; }
+  .login-box .field label { font-size: 12px; color: var(--muted); }
+  .login-box .field input {
+    background: #0b1220; border: 1px solid var(--border); color: var(--text);
+    padding: 9px 12px; border-radius: 6px; font-size: 14px; width: 100%;
+  }
+  .login-box button {
+    width: 100%; padding: 10px; font-size: 15px; margin-top: 6px;
+  }
+  .login-box .login-err { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .logout-btn {
+    background: transparent; color: var(--muted); border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
+    margin: auto 16px 16px; text-align: left;
+  }
+  .logout-btn:hover { color: var(--text); background: #111c30; }
+  .sidebar .logo-row { display: flex; align-items: center; padding: 0 20px 20px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+  .sidebar .logo-row .logo { padding: 0; border: none; margin: 0; }
 </style>
 </head>
 <body>
+<!-- 登录遮罩 -->
+<div class="login-mask" id="loginMask">
+  <div class="login-box">
+    <h1>测试平台</h1>
+    <div class="login-sub">请登录后使用</div>
+    <div class="field">
+      <label>用户名</label>
+      <input id="loginUser" placeholder="master" autocomplete="username">
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input id="loginPwd" type="password" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <button onclick="doLogin()">登 录</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
 <div class="layout">
   <div class="sidebar">
-    <div class="logo">阅片并发测试</div>
+    <div class="logo-row">
+      <div class="logo">测试平台</div>
+    </div>
     <a class="nav-item active" data-tab="single" onclick="switchTab('single')">单接口测试</a>
     <a class="nav-item" data-tab="multi" onclick="switchTab('multi')">多接口测试</a>
     <a class="nav-item" data-tab="concurrency" onclick="switchTab('concurrency')">并发测试</a>
     <a class="nav-item" data-tab="record" onclick="switchTab('record')">录制</a>
-    <!-- 自动化测试入口暂时隐藏
     <a class="nav-item" data-tab="auto" onclick="switchTab('auto')">自动化测试</a>
-    -->
+    <button class="logout-btn" onclick="doLogout()">退出登录</button>
   </div>
 
   <div class="content">
@@ -529,7 +579,7 @@
     <label>用户数</label>
     <input id="users" type="number" value="20" min="1" max="100">
     <label>图像加载超时上限(秒)</label>
-    <input id="observe" type="number" value="120" min="10" max="300">
+    <input id="observe" type="number" value="300" min="10" max="300">
     <button id="btnStartFull" onclick="startTest('full')">全接口测试</button>
     <button id="btnStartFrame" onclick="startTest('frame_only')">图像加载测试</button>
     <button class="btn2" onclick="saveModule('concurrency')">保存至历史记录</button>
@@ -706,6 +756,109 @@ let ws = null;
 let users = [];
 let framesTotal = 0;
 let logCount = 0;
+let authToken = localStorage.getItem("authToken") || "";
+
+// ---- 登录认证 ----
+// 统一的 fetch 封装：自动带上 token
+async function apiFetch(url, options) {
+  options = options || {};
+  options.headers = options.headers || {};
+  if (authToken) {
+    options.headers["Authorization"] = "Bearer " + authToken;
+  }
+  const res = await fetch(url, options);
+  if (res.status === 401) {
+    // 未登录或过期，显示登录框
+    showLogin();
+    throw new Error("未登录或登录已过期");
+  }
+  return res;
+}
+
+function showLogin() {
+  document.getElementById("loginMask").style.display = "flex";
+  document.getElementById("loginErr").textContent = "";
+}
+
+function hideLogin() {
+  document.getElementById("loginMask").style.display = "none";
+}
+
+async function doLogin() {
+  const username = document.getElementById("loginUser").value.trim();
+  const password = document.getElementById("loginPwd").value;
+  const errEl = document.getElementById("loginErr");
+  if (!username || !password) {
+    errEl.textContent = "请输入用户名和密码";
+    return;
+  }
+  try {
+    const res = await fetch("/api/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      errEl.textContent = data.msg || "登录失败";
+      return;
+    }
+    authToken = data.token;
+    localStorage.setItem("authToken", authToken);
+    hideLogin();
+    showToast("登录成功");
+    // 登录后初始化
+    initAfterLogin();
+  } catch (e) {
+    errEl.textContent = "登录失败：" + e;
+  }
+}
+
+async function doLogout() {
+  try {
+    await apiFetch("/api/logout", { method: "POST" });
+  } catch (e) {}
+  authToken = "";
+  localStorage.removeItem("authToken");
+  showLogin();
+}
+
+// 登录后初始化（连接 WebSocket、加载配置等）
+function initAfterLogin() {
+  connect();
+  loadConfig();
+  ["single", "multi", "concurrency", "auto"].forEach(loadHistory);
+}
+
+// 页面加载时：有 token 则尝试直接进入，否则显示登录框
+(function checkAuth() {
+  if (authToken) {
+    // 验证 token 是否有效
+    fetch("/api/config", { headers: { "Authorization": "Bearer " + authToken } })
+      .then(res => {
+        if (res.ok) {
+          hideLogin();
+          initAfterLogin();
+        } else {
+          authToken = "";
+          localStorage.removeItem("authToken");
+          showLogin();
+        }
+      })
+      .catch(() => showLogin());
+  } else {
+    showLogin();
+  }
+})();
+
+// 登录框回车触发登录
+document.addEventListener("DOMContentLoaded", () => {
+  const pwd = document.getElementById("loginPwd");
+  if (pwd) {
+    pwd.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") doLogin();
+    });
+  }
+});
 
 // ---- 导航切换 ----
 function switchTab(name) {
@@ -809,7 +962,7 @@ function applyConcurrency(d) {
   document.getElementById("cfgPassword").value = d.password || "";
   document.getElementById("cfgAccounts").value = d.accounts_text || "";
   document.getElementById("users").value = d.users || 20;
-  document.getElementById("observe").value = d.observe || 120;
+  document.getElementById("observe").value = d.observe || 300;
   window.customApis = d.custom_apis || null;
   // 更新账号数显示
   const accounts = (d.accounts_text || "").split("\n").filter(s => s.trim());
@@ -890,7 +1043,7 @@ async function saveModule(module) {
   const name = await askName();
   if (name === null) return; // 用户取消
   try {
-    const res = await fetch("/api/saved-tests", {
+    const res = await apiFetch("/api/saved-tests", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ module, name, data })
     });
@@ -942,7 +1095,7 @@ function askName() {
 // 从服务器加载该模块的历史记录列表并渲染
 async function loadHistory(module) {
   try {
-    const res = await fetch("/api/saved-tests");
+    const res = await apiFetch("/api/saved-tests");
     const r = await res.json();
     if (!r.ok) return;
     renderHistory(module, (r.saved || {})[module]);
@@ -956,7 +1109,7 @@ async function loadModule(module) {
   const apply = MODULE_APPLIERS[module];
   if (!apply) return;
   try {
-    const res = await fetch("/api/saved-tests");
+    const res = await apiFetch("/api/saved-tests");
     const r = await res.json();
     if (!r.ok) { alert("加载失败"); return; }
     const records = (r.saved || {})[module];
@@ -1057,7 +1210,7 @@ async function deleteHistory(module, recordId) {
   const ok = await askConfirm("确定删除这条记录？");
   if (!ok) return;
   try {
-    const res = await fetch(`/api/saved-tests/${module}/${recordId}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/saved-tests/${module}/${recordId}`, { method: "DELETE" });
     const r = await res.json();
     if (r.ok) {
       loadHistory(module);
@@ -1134,7 +1287,7 @@ async function uploadAutoExcel() {
   const formData = new FormData();
   formData.append("file", file);
   try {
-    const res = await fetch("/api/ui-test/upload", {
+    const res = await apiFetch("/api/ui-test/upload", {
       method: "POST", body: formData
     });
     const data = await res.json();
@@ -1188,7 +1341,7 @@ async function runAutoTest() {
     cases: uiCases,
   };
   try {
-    const res = await fetch("/api/ui-test/start", {
+    const res = await apiFetch("/api/ui-test/start", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
@@ -1204,7 +1357,7 @@ async function runAutoTest() {
 }
 
 async function stopUiTest() {
-  await fetch("/api/ui-test/stop", { method: "POST" });
+  await apiFetch("/api/ui-test/stop", { method: "POST" });
 }
 
 // 兜底轮询 UI 测试状态（WebSocket 正常时由事件驱动，这里仅作保险）
@@ -1212,13 +1365,13 @@ async function pollUiTest() {
   const statusEl = document.getElementById("autoStatus");
   for (let i = 0; i < 1800; i++) {
     await new Promise(r => setTimeout(r, 2000));
-    const res = await fetch("/api/ui-test/status");
+    const res = await apiFetch("/api/ui-test/status");
     const data = await res.json();
     if (!data.running) {
       document.getElementById("btnUiStop").disabled = true;
       // 若 WebSocket 事件没更新结果，则拉取一次
       if (!window._uiResults || !window._uiResults.length) {
-        const done = await fetch("/api/ui-test/results");
+        const done = await apiFetch("/api/ui-test/results");
         const r = await done.json();
         if (r.ok && r.results) {
           window._uiResults = r.results;
@@ -1292,7 +1445,7 @@ async function startRecord() {
   const loginFirst = document.getElementById("recordLoginFirst").checked;
   const account = document.getElementById("recordAccount").value.trim();
   const password = document.getElementById("recordPassword").value;
-  const res = await fetch("/api/record/start", {
+  const res = await apiFetch("/api/record/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ url, login_first: loginFirst, account, password })
   });
@@ -1306,7 +1459,7 @@ async function startRecord() {
 }
 
 async function stopRecord() {
-  const res = await fetch("/api/record/stop", { method: "POST" });
+  const res = await apiFetch("/api/record/stop", { method: "POST" });
   const data = await res.json();
   if (!data.ok) { alert(data.msg); return; }
   recordedRequests = data.requests || [];
@@ -1431,7 +1584,7 @@ async function runSingleTest() {
   addSingleLog("info", `→ 发送请求：${method} ${url}（循环 ${repeat} 次）`);
   if (body) addSingleLog("info", `→ 请求体 (${content_type})：${body}`);
   try {
-    const res = await fetch("/api/proxy", {
+    const res = await apiFetch("/api/proxy", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, method, body: method === "POST" ? body : "", content_type, repeat })
     });
@@ -1609,7 +1762,7 @@ async function runMultiTest() {
   };
   addMultiLog("info", `开始多接口测试，目标：${payload.base_url}，共 ${apis.length} 个接口`);
   try {
-    const res = await fetch("/api/multi-test", {
+    const res = await apiFetch("/api/multi-test", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload)
     });
@@ -1727,7 +1880,8 @@ function renderMultiLog(data) {
 }
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/ws`);
+  if (!authToken) return;
+  ws = new WebSocket(`ws://${location.host}/ws?token=${encodeURIComponent(authToken)}`);
   ws.onmessage = (e) => handleEvent(JSON.parse(e.data));
   ws.onclose = () => { setTimeout(connect, 2000); };
 }
@@ -1832,7 +1986,7 @@ function handleEvent(ev) {
 }
 
 async function loadAggregate() {
-  const res = await fetch("/api/aggregate");
+  const res = await apiFetch("/api/aggregate");
   const data = await res.json();
   if (!data.ok) return;
   const el = document.getElementById("aggregate");
@@ -1896,7 +2050,7 @@ async function loadAggregate() {
 }
 
 async function loadEvidence() {
-  const res = await fetch("/api/report");
+  const res = await apiFetch("/api/report");
   const data = await res.json();
   if (!data.ok) return;
   const el = document.getElementById("evidence");
@@ -1920,7 +2074,7 @@ async function loadEvidence() {
 }
 
 async function downloadReport() {
-  const res = await fetch("/api/report");
+  const res = await apiFetch("/api/report");
   const data = await res.json();
   if (!data.ok) { alert(data.msg); return; }
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -2075,7 +2229,7 @@ function fillConfigForm(cfg) {
 }
 
 async function loadConfig() {
-  const res = await fetch("/api/config");
+  const res = await apiFetch("/api/config");
   const data = await res.json();
   if (data.ok) {
     fillConfigForm(data.config);
@@ -2126,7 +2280,7 @@ async function saveConfig() {
     password: document.getElementById("cfgPassword").value,
     accounts_text: document.getElementById("cfgAccounts").value,
   };
-  const res = await fetch("/api/config", {
+  const res = await apiFetch("/api/config", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
@@ -2143,7 +2297,7 @@ async function saveConfig() {
 
 async function startTest(mode) {
   const users = parseInt(document.getElementById("users").value) || 20;
-  const observe = parseFloat(document.getElementById("observe").value) || 120;
+  const observe = parseFloat(document.getElementById("observe").value) || 300;
   // 先保存当前表单配置，再启动
   await saveConfig();
   const payload = { users, observe, mode };
@@ -2151,7 +2305,7 @@ async function startTest(mode) {
   if (window.customApis && window.customApis.length) {
     payload.apis = window.customApis;
   }
-  const res = await fetch("/api/start", {
+  const res = await apiFetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
@@ -2160,11 +2314,11 @@ async function startTest(mode) {
 }
 
 async function stopTest() {
-  await fetch("/api/stop", { method: "POST" });
+  await apiFetch("/api/stop", { method: "POST" });
 }
 
 async function clearLog() {
-  await fetch("/api/clear", { method: "POST" });
+  await apiFetch("/api/clear", { method: "POST" });
   // 清空前端显示
   document.getElementById("log").innerHTML = "";
   document.getElementById("summaryBody").innerHTML = "";
@@ -2176,11 +2330,6 @@ async function clearLog() {
   updateStats();
   addLog("info", "日志已清空");
 }
-
-connect();
-loadConfig();
-// 初始化各模块历史记录
-["single", "multi", "concurrency", "auto"].forEach(loadHistory);
 </script>
 </body>
 </html>

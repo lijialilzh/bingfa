@@ -8,8 +8,8 @@ COPY requirements-docker.txt .
 RUN pip install -r requirements-docker.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 
 # 复制项目文件
-COPY engine.py server.py index.html config.json ./
+COPY engine.py server.py index.html config.json record.py ui_test.py ./
 
-EXPOSE 9000
+EXPOSE 19000
 
 CMD ["python", "server.py"]

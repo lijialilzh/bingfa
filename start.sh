@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 一键重启阅片并发测试面板：先杀掉旧进程，再后台启动新进程
+# 一键重启测试平台：先杀掉旧进程，再后台启动新进程
 cd "$(dirname "$0")"
 
-# 杀掉占用 9000 端口的旧进程（比按名字杀更可靠）
-if lsof -ti:9000 >/dev/null 2>&1; then
-  lsof -ti:9000 | xargs kill -9 2>/dev/null
+# 杀掉占用 19000 端口的旧进程（比按名字杀更可靠）
+if lsof -ti:19000 >/dev/null 2>&1; then
+  lsof -ti:19000 | xargs kill -9 2>/dev/null
   sleep 1
 fi
 
@@ -22,9 +22,9 @@ sleep 1
 if kill -0 "$PID" 2>/dev/null; then
   echo "=============================================="
   echo "  服务已启动 (PID: $PID)"
-  echo "  访问面板: http://localhost:9000/"
+  echo "  访问面板: http://localhost:19000/"
   echo "  查看日志: tail -f server.log"
-  echo "  停止服务: lsof -ti:9000 | xargs kill -9"
+  echo "  停止服务: lsof -ti:19000 | xargs kill -9"
   echo "=============================================="
 else
   echo "启动失败，请查看 server.log"
