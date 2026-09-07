@@ -15,10 +15,124 @@
   body {
     background: var(--bg); color: var(--text);
     font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
-    padding: 16px; min-height: 100vh;
+    min-height: 100vh;
   }
   h1 { font-size: 20px; margin-bottom: 4px; }
   .sub { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  /* ---- 布局：左侧导航 + 右侧内容 ---- */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar {
+    width: 200px; flex-shrink: 0; background: #0b1220;
+    border-right: 1px solid var(--border);
+    padding: 20px 0; position: sticky; top: 0; height: 100vh;
+    display: flex; flex-direction: column;
+  }
+  .sidebar .logo {
+    font-size: 16px; font-weight: 700; padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border); margin-bottom: 12px;
+  }
+  .nav-item {
+    display: block; padding: 12px 20px; color: var(--muted);
+    cursor: pointer; font-size: 14px; text-decoration: none;
+    border-left: 3px solid transparent; transition: all 0.15s;
+  }
+  .nav-item:hover { color: var(--text); background: #111c30; }
+  .nav-item.active {
+    color: var(--text); background: #111c30;
+    border-left-color: var(--blue); font-weight: 600;
+  }
+  .content { flex: 1; padding: 16px; min-width: 0; }
+  .tab-page { display: none; }
+  .tab-page.active { display: block; }
+
+  /* ---- 模块内子 tab（测试 / 历史记录）---- */
+  .sub-tabs {
+    display: flex; gap: 4px; margin: 12px 0 16px;
+    background: #0b1220; border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px; width: fit-content;
+  }
+  .sub-tab {
+    padding: 7px 20px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; color: var(--muted); user-select: none;
+    transition: all 0.15s;
+  }
+  .sub-tab:hover { color: var(--text); }
+  .sub-tab.active {
+    background: var(--blue); color: #fff; font-weight: 600;
+  }
+  .sub-page { display: none; }
+  .sub-page.active { display: block; }
+
+  /* ---- 单接口/多接口测试页 ---- */
+  .api-test-form {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px; margin-bottom: 16px;
+  }
+  .api-test-form .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; align-items: flex-end; }
+  .api-test-form .field { display: flex; flex-direction: column; gap: 4px; }
+  .api-test-form .field label { font-size: 12px; color: var(--muted); }
+  .api-test-form .field input, .api-test-form .field select, .api-test-form .field textarea {
+    background: #0b1220; border: 1px solid var(--border); color: var(--text);
+    padding: 7px 10px; border-radius: 6px; font-size: 13px;
+  }
+  .api-test-form .field select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+    padding-right: 28px; cursor: pointer;
+  }
+  .api-test-form .field input { width: 220px; }
+  .api-test-form .field textarea { width: 100%; min-height: 80px; font-family: Menlo, monospace; }
+  .api-test-form .field select { width: 220px; }
+  .api-test-form button {
+    padding: 5px 16px; font-size: 13px; font-weight: 500; line-height: 1.4;
+  }
+  .api-row {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  .api-row input, .api-row select {
+    background: #0b1220; border: 1px solid var(--border); color: var(--text);
+    padding: 6px 8px; border-radius: 6px; font-size: 13px;
+  }
+  .api-row select {
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2394a3b8' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    padding-right: 26px; cursor: pointer;
+  }
+  .api-row .api-name { width: 120px; }
+  .api-row .api-method { width: 90px; }
+  .api-row .api-url { flex: 1; min-width: 200px; }
+  .api-row .api-body { width: 200px; }
+  .api-row .api-ctype { width: 180px; }
+  .api-row .api-del {
+    background: var(--red); color: #fff; border: none; border-radius: 6px;
+    padding: 6px 10px; cursor: pointer; font-size: 12px; flex-shrink: 0;
+  }
+  .account-row {
+    display: flex; gap: 8px; align-items: center; margin-bottom: 8px;
+  }
+  .account-row input {
+    background: #0b1220; border: 1px solid var(--border); color: var(--text);
+    padding: 6px 8px; border-radius: 6px; font-size: 13px;
+  }
+  .account-row .acc-role { width: 140px; }
+  .account-row .acc-name { width: 160px; }
+  .account-row .acc-pwd { width: 160px; }
+  .account-row .acc-del {
+    background: var(--red); color: #fff; border: none; border-radius: 6px;
+    padding: 6px 10px; cursor: pointer; font-size: 12px; flex-shrink: 0;
+  }
+  .resp-box {
+    background: #0b1220; border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; font-family: Menlo, monospace; font-size: 12px;
+    white-space: pre-wrap; word-break: break-all; max-height: 400px; overflow-y: auto;
+  }
+  .placeholder {
+    background: var(--panel); border: 1px dashed var(--border);
+    border-radius: 10px; padding: 40px; text-align: center; color: var(--muted);
+  }
 
   .controls {
     display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
@@ -115,7 +229,7 @@
     border: 1px solid var(--border); padding: 6px 8px; text-align: left;
   }
   .summary-table th { background: #0b1220; color: var(--muted); }
-  .summary-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .summary-table td.num { text-align: left; font-variant-numeric: tabular-nums; }
 
   .config-panel { margin-bottom: 16px; }
   .config-panel .row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
@@ -129,17 +243,253 @@
   .config-panel .field textarea { width: 100%; min-height: 90px; font-family: Menlo, monospace; }
   .config-panel .hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
   .config-panel .actions { display: flex; gap: 10px; align-items: center; }
-  .config-panel .btn2 {
+  .btn2 {
     background: #334155; color: var(--text); border: 1px solid var(--border);
     padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 13px;
   }
-  .config-panel .btn2:hover { background: #475569; }
+  .btn2:hover { background: #475569; }
   .config-panel .saved { color: var(--green); font-size: 13px; }
+
+  /* ---- 历史记录面板 ---- */
+  .history-panel { margin-top: 16px; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    display: flex; align-items: center; gap: 10px;
+    background: #0b1220; border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 12px; font-size: 13px;
+    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+  }
+  .history-item:hover { border-color: var(--blue); background: #111c30; }
+  .history-item .h-name { font-weight: 600; color: var(--text); }
+  .history-item .h-time { color: var(--muted); font-size: 12px; }
+  .history-item .h-summary {
+    color: var(--muted); font-size: 12px; flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .history-item .h-btn {
+    background: #334155; color: var(--text); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    flex-shrink: 0;
+  }
+  .history-item .h-btn:hover { background: #475569; }
+  .history-item .h-btn.del { background: #3a1515; border-color: var(--red); color: #fca5a5; }
+  .history-item .h-btn.del:hover { background: #4a1a1a; }
+  .history-empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+  /* ---- 表单回填高亮动画 ---- */
+  @keyframes flashHighlight {
+    0% { box-shadow: 0 0 0 2px var(--blue); background: #1e3a5f; }
+    100% { box-shadow: 0 0 0 0 transparent; background: transparent; }
+  }
+  .flash-highlight {
+    animation: flashHighlight 1.2s ease-out;
+    border-radius: 10px;
+  }
+
+  /* ---- 命名输入弹窗 ---- */
+  .modal-mask {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.55);
+    display: flex; align-items: center; justify-content: center; z-index: 1000;
+  }
+  .modal-box {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 10px; padding: 20px; width: 360px; max-width: 90vw;
+  }
+  .modal-box h3 { font-size: 15px; margin-bottom: 12px; }
+  .modal-box input {
+    width: 100%; background: #0b1220; border: 1px solid var(--border);
+    color: var(--text); padding: 8px 10px; border-radius: 6px; font-size: 13px;
+    margin-bottom: 14px;
+  }
+  .modal-box .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+  .modal-box .modal-actions button { padding: 6px 16px; font-size: 13px; }
+
+  /* ---- 顶部 toast 提示 ---- */
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    color: #4ade80; font-size: 14px; font-weight: 600;
+    z-index: 2000; text-shadow: 0 1px 4px rgba(0,0,0,0.6);
+    opacity: 0; transition: opacity 0.25s, transform 0.25s;
+    pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.error { color: #fca5a5; }
 </style>
 </head>
 <body>
-  <h1>阅片并发测试 · 可视化面板</h1>
-  <div class="sub">模拟 100 个不同用户（不同笔记本 + Chrome）同时登录并进入图像工作站阅片</div>
+<div class="layout">
+  <div class="sidebar">
+    <div class="logo">阅片并发测试</div>
+    <a class="nav-item active" data-tab="single" onclick="switchTab('single')">单接口测试</a>
+    <a class="nav-item" data-tab="multi" onclick="switchTab('multi')">多接口测试</a>
+    <a class="nav-item" data-tab="concurrency" onclick="switchTab('concurrency')">并发测试</a>
+    <a class="nav-item" data-tab="record" onclick="switchTab('record')">录制</a>
+    <!-- 自动化测试入口暂时隐藏
+    <a class="nav-item" data-tab="auto" onclick="switchTab('auto')">自动化测试</a>
+    -->
+  </div>
+
+  <div class="content">
+    <!-- ============ 单接口测试 ============ -->
+    <div class="tab-page active" id="tab-single">
+      <h1>单接口测试</h1>
+      <div class="sub">输入请求地址，发送请求并查看完整请求/响应信息</div>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-sub="test" onclick="switchSubTab('single', 'test')">测试</div>
+        <div class="sub-tab" data-sub="history" onclick="switchSubTab('single', 'history')">历史记录</div>
+      </div>
+      <div class="sub-page active" id="single-test">
+      <div class="api-test-form">
+        <div class="row">
+          <div class="field">
+            <label>方法</label>
+            <select id="singleMethod" style="width:120px">
+              <option>GET</option><option>POST</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1">
+            <label>请求 URL</label>
+            <input id="singleUrl" style="width:100%" placeholder="http://192.168.108.109:8000/api/v1/user/login">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>Content-Type</label>
+            <select id="singleContentType" style="width:220px" onchange="onSingleContentTypeChange()">
+              <option value="application/json">application/json</option>
+              <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+              <option value="text/plain">text/plain</option>
+              <option value="application/xml">application/xml</option>
+              <option value="text/xml">text/xml</option>
+            </select>
+          </div>
+          <div class="field" style="flex:1">
+            <label>请求体（POST 时使用，格式与 Content-Type 对应）</label>
+            <textarea id="singleBody" placeholder='{"name":"test","password":"..."}'></textarea>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>循环次数</label>
+            <input id="singleRepeat" type="number" value="1" min="1" max="100" style="width:100px">
+          </div>
+          <button onclick="runSingleTest()">发送请求</button>
+          <button class="btn2" onclick="saveModule('single')">保存至历史记录</button>
+          <button class="btn2" onclick="loadModule('single')">加载上次</button>
+          <span id="singleStatus" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px;margin-bottom:0">
+          <div class="field">
+            <label>快速填充（可选，选中后自动填入上方表单）</label>
+            <select id="singleApiSelect" onchange="fillSingleTemplate(this.value)">
+              <option value="">— 选择常用接口 —</option>
+              <option value="login">登录 POST /api/v1/user/login</option>
+              <option value="checkLogin">会话校验 GET /api/v1/user/checkLogin</option>
+              <option value="studies">图像元数据 GET /api/v1/studies</option>
+              <option value="dcp">序列数据 GET /api/repacs/series/{series_uid}/dcp</option>
+              <option value="thumbnail">缩略图 GET /RESULT/thumbnail/{series_uid}/thumbnail.jpg</option>
+              <option value="frame">图像帧 GET /xa_brain_encrypt/...</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>实时日志</h2>
+        <div class="log" id="singleLog" style="max-height:400px">
+          <div class="row info">等待发送请求…</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h2>聚合报告</h2>
+        <div id="singleAggregate" style="font-size:13px;color:var(--muted)">发送请求后显示统计</div>
+      </div>
+      </div>
+      <div class="sub-page" id="single-history">
+        <div class="panel">
+          <h2>历史记录</h2>
+          <div class="history-list" id="singleHistory"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 多接口测试 ============ -->
+    <div class="tab-page" id="tab-multi">
+      <h1>多接口测试</h1>
+      <div class="sub">按顺序依次调用多个接口，查看每个接口的响应</div>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-sub="test" onclick="switchSubTab('multi', 'test')">测试</div>
+        <div class="sub-tab" data-sub="history" onclick="switchSubTab('multi', 'history')">历史记录</div>
+      </div>
+      <div class="sub-page active" id="multi-test">
+      <div class="api-test-form">
+        <div class="row">
+          <div class="field">
+            <label>产品地址 (base_url)</label>
+            <input id="multiBaseUrl" placeholder="http://192.168.108.109:8000">
+          </div>
+          <div class="field">
+            <label>study_uid</label>
+            <input id="multiStudyUid" placeholder="1.3.46.670589...">
+          </div>
+          <div class="field">
+            <label>series_uid</label>
+            <input id="multiSeriesUid" placeholder="1.3.46.670589...">
+          </div>
+          <div class="field">
+            <label>账号</label>
+            <input id="multiAccount" placeholder="test">
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input id="multiPassword" placeholder="123qwe">
+          </div>
+          <div class="field">
+            <label>循环次数</label>
+            <input id="multiRepeat" type="number" value="1" min="1" max="100" style="width:100px">
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>接口列表（每个接口一行，按顺序执行）</label>
+            <div id="multiApiList"></div>
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn2" onclick="addApiRow()">+ 添加接口</button>
+          <button onclick="runMultiTest()">开始多接口测试</button>
+          <button class="btn2" onclick="saveModule('multi')">保存至历史记录</button>
+          <button class="btn2" onclick="loadModule('multi')">加载上次</button>
+          <span id="multiStatus" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>实时日志</h2>
+        <div class="log" id="multiLog" style="max-height:400px">
+          <div class="row info">等待开始测试…</div>
+        </div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h2>聚合报告</h2>
+        <div id="multiAggregate" style="font-size:13px;color:var(--muted)">测试完成后显示统计</div>
+      </div>
+      </div>
+      <div class="sub-page" id="multi-history">
+        <div class="panel">
+          <h2>历史记录</h2>
+          <div class="history-list" id="multiHistory"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 并发测试 ============ -->
+    <div class="tab-page" id="tab-concurrency">
+      <h1>并发测试</h1>
+      <div class="sub">模拟多个用户同时访问接口，每个用户依次调用：登录 → 会话校验 → 消息令牌 → 图像元数据 → 序列数据 → 缩略图 → 图像帧</div>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-sub="test" onclick="switchSubTab('concurrency', 'test')">测试</div>
+        <div class="sub-tab" data-sub="history" onclick="switchSubTab('concurrency', 'history')">历史记录</div>
+      </div>
+      <div class="sub-page active" id="concurrency-test">
 
   <div class="panel config-panel">
     <h2>接口与账号配置</h2>
@@ -147,14 +497,6 @@
       <div class="field">
         <label>产品地址 (base_url)</label>
         <input id="cfgBaseUrl" placeholder="http://192.168.108.109:8000">
-      </div>
-      <div class="field">
-        <label>登录页路径</label>
-        <input id="cfgLoginPath" placeholder="/app/center/login">
-      </div>
-      <div class="field">
-        <label>阅片页路径模板</label>
-        <input id="cfgViewerPath" placeholder="/app/txzq/view/{study_uid}">
       </div>
       <div class="field">
         <label>阅片目标 study_uid</label>
@@ -185,11 +527,13 @@
 
   <div class="controls">
     <label>用户数</label>
-    <input id="users" type="number" value="100" min="1" max="100">
+    <input id="users" type="number" value="20" min="1" max="100">
     <label>图像加载超时上限(秒)</label>
-    <input id="observe" type="number" value="60" min="10" max="300">
-    <button id="btnStartFull" onclick="startTest('full')">全部接口测试</button>
+    <input id="observe" type="number" value="120" min="10" max="300">
+    <button id="btnStartFull" onclick="startTest('full')">全接口测试</button>
     <button id="btnStartFrame" onclick="startTest('frame_only')">图像加载测试</button>
+    <button class="btn2" onclick="saveModule('concurrency')">保存至历史记录</button>
+    <button class="btn2" onclick="loadModule('concurrency')">加载上次</button>
     <button id="btnStop" class="stop" onclick="stopTest()" disabled>停止</button>
     <button class="btn2" onclick="clearLog()">清空日志</button>
     <span id="runState" style="font-size:13px;color:var(--muted)">空闲</span>
@@ -229,18 +573,1158 @@
   </div>
 
   <div class="panel" style="margin-top:16px">
+    <h2>聚合报告</h2>
+    <div id="aggregate" style="font-size:13px;color:var(--muted)">测试完成后显示</div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
     <h2>并发证据（可审计）</h2>
     <div id="evidence" style="font-size:13px;color:var(--muted)">测试完成后显示</div>
     <div style="margin-top:10px">
       <button class="btn2" onclick="downloadReport()">导出报告 (JSON)</button>
     </div>
   </div>
+      </div>
+      <div class="sub-page" id="concurrency-history">
+        <div class="panel">
+          <h2>历史记录</h2>
+          <div class="history-list" id="concurrencyHistory"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 录制 ============ -->
+    <div class="tab-page" id="tab-record">
+      <h1>录制</h1>
+      <div class="sub">打开真实浏览器手动操作，自动捕获所有 HTTP 请求，停止后可导入到多接口测试</div>
+      <div class="api-test-form">
+        <div class="row">
+          <div class="field" style="flex:1">
+            <label>起始 URL（从哪个页面开始录制）</label>
+            <input id="recordUrl" style="width:100%" placeholder="http://192.168.108.109:8000/app/txzq/view/1.3.46.670589...">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>账号</label>
+            <input id="recordAccount" placeholder="test" style="width:140px">
+          </div>
+          <div class="field">
+            <label>密码</label>
+            <input id="recordPassword" placeholder="123qwe" style="width:140px">
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="recordLoginFirst" checked style="width:auto">
+              先登录再打开起始页
+            </label>
+          </div>
+        </div>
+        <div class="row">
+          <button id="btnRecordStart" onclick="startRecord()">开始录制</button>
+          <button id="btnRecordStop" class="stop" onclick="stopRecord()" disabled>停止录制</button>
+          <button class="btn2" onclick="importRecorded()">导入到多接口测试</button>
+          <button class="btn2" onclick="importRecordedToConcurrency()">导入到并发测试</button>
+          <span id="recordStatus" style="font-size:13px;color:var(--muted)">空闲</span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>捕获的请求</h2>
+        <div class="log" id="recordLog" style="max-height:500px">
+          <div class="row info">尚未开始录制</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ 自动化测试 ============ -->
+    <div class="tab-page" id="tab-auto">
+      <h1>自动化测试</h1>
+      <div class="sub">上传 Excel 用例，用浏览器自动执行每条用例的操作步骤，验证预期结果</div>
+      <div class="sub-tabs">
+        <div class="sub-tab active" data-sub="test" onclick="switchSubTab('auto', 'test')">测试</div>
+        <div class="sub-tab" data-sub="history" onclick="switchSubTab('auto', 'history')">历史记录</div>
+      </div>
+      <div class="sub-page active" id="auto-test">
+      <div class="api-test-form">
+        <div class="row">
+          <div class="field" style="flex:1">
+            <label>起始地址（可选，用例第一步不是"打开网址"时先打开它）</label>
+            <input id="autoBaseUrl" placeholder="http://192.168.108.109:8000">
+          </div>
+          <div class="field" style="flex:1">
+            <label>登录页地址（自动登录时打开）</label>
+            <input id="autoLoginUrl" placeholder="http://192.168.108.109:8000/app/center/login">
+          </div>
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="autoHeadless" checked style="width:auto">
+              无头模式（后台执行）
+            </label>
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>账号配置（用例步骤里写「超级管理员登录」等，自动用对应账号登录）</label>
+            <div id="autoAccounts"></div>
+            <button class="btn2" onclick="addAccountRow()" style="margin-top:8px">+ 添加账号</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field" style="flex:1">
+            <label>上传 Excel 用例（列：用例编号 | 用例名称 | 操作步骤 | 预期结果）</label>
+            <input type="file" id="autoExcel" accept=".xlsx,.xls" onchange="uploadAutoExcel()">
+            <div class="hint">操作步骤单元格内可用换行写多个步骤，如：<br>超级管理员登录<br>点击 用户管理<br>验证 页面包含 用户列表</div>
+          </div>
+        </div>
+        <div class="row">
+          <button onclick="runAutoTest()">执行全部用例</button>
+          <button id="btnUiStop" class="stop" onclick="stopUiTest()" disabled>停止</button>
+          <span id="autoStatus" style="font-size:13px;color:var(--muted)"></span>
+        </div>
+      </div>
+      <div class="panel">
+        <h2>用例列表</h2>
+        <div id="autoCaseList" style="font-size:13px;color:var(--muted)">尚未上传用例</div>
+      </div>
+      <div class="panel" style="margin-top:16px">
+        <h2>执行结果</h2>
+        <div id="autoResult" style="font-size:13px;color:var(--muted)">尚未执行</div>
+      </div>
+      </div>
+      <div class="sub-page" id="auto-history">
+        <div class="panel">
+          <h2>历史记录</h2>
+          <div class="history-list" id="autoHistory"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 let ws = null;
 let users = [];
 let framesTotal = 0;
 let logCount = 0;
+
+// ---- 导航切换 ----
+function switchTab(name) {
+  document.querySelectorAll(".nav-item").forEach(el => {
+    el.classList.toggle("active", el.dataset.tab === name);
+  });
+  document.querySelectorAll(".tab-page").forEach(el => {
+    el.classList.toggle("active", el.id === "tab-" + name);
+  });
+}
+
+// ---- 模块内子 tab 切换（测试 / 历史记录）----
+function switchSubTab(module, sub) {
+  const tab = document.getElementById("tab-" + module);
+  if (!tab) return;
+  tab.querySelectorAll(".sub-tab").forEach(el => {
+    el.classList.toggle("active", el.dataset.sub === sub);
+  });
+  tab.querySelectorAll(".sub-page").forEach(el => {
+    el.classList.toggle("active", el.id === module + "-" + sub);
+  });
+  // 切到历史记录时刷新列表
+  if (sub === "history") loadHistory(module);
+}
+
+// ---- 各模块测试配置的保存/加载 ----
+// 收集单接口测试表单
+function collectSingle() {
+  return {
+    method: document.getElementById("singleMethod").value,
+    url: document.getElementById("singleUrl").value.trim(),
+    content_type: document.getElementById("singleContentType").value,
+    body: document.getElementById("singleBody").value,
+    repeat: document.getElementById("singleRepeat").value,
+  };
+}
+
+// 应用单接口测试表单
+function applySingle(d) {
+  if (!d) return;
+  document.getElementById("singleMethod").value = d.method || "GET";
+  document.getElementById("singleUrl").value = d.url || "";
+  document.getElementById("singleContentType").value = d.content_type || "application/json";
+  document.getElementById("singleBody").value = d.body || "";
+  document.getElementById("singleRepeat").value = d.repeat || 1;
+  onSingleContentTypeChange();
+}
+
+// 收集多接口测试表单
+function collectMulti() {
+  return {
+    base_url: document.getElementById("multiBaseUrl").value.trim(),
+    study_uid: document.getElementById("multiStudyUid").value.trim(),
+    series_uid: document.getElementById("multiSeriesUid").value.trim(),
+    account: document.getElementById("multiAccount").value.trim(),
+    password: document.getElementById("multiPassword").value,
+    repeat: document.getElementById("multiRepeat").value,
+    apis: collectApis(),
+  };
+}
+
+// 应用多接口测试表单
+function applyMulti(d) {
+  if (!d) return;
+  document.getElementById("multiBaseUrl").value = d.base_url || "";
+  document.getElementById("multiStudyUid").value = d.study_uid || "";
+  document.getElementById("multiSeriesUid").value = d.series_uid || "";
+  document.getElementById("multiAccount").value = d.account || "";
+  document.getElementById("multiPassword").value = d.password || "";
+  document.getElementById("multiRepeat").value = d.repeat || 1;
+  const list = document.getElementById("multiApiList");
+  list.innerHTML = "";
+  const apis = d.apis || [];
+  if (apis.length) {
+    for (const api of apis) addApiRow(api);
+  } else {
+    addApiRow();
+  }
+}
+
+// 收集并发测试表单
+function collectConcurrency() {
+  return {
+    base_url: document.getElementById("cfgBaseUrl").value.trim(),
+    study_uid: document.getElementById("cfgStudyUid").value.trim(),
+    series_uid: document.getElementById("cfgSeriesUid").value.trim(),
+    password: document.getElementById("cfgPassword").value,
+    accounts_text: document.getElementById("cfgAccounts").value,
+    users: document.getElementById("users").value,
+    observe: document.getElementById("observe").value,
+    custom_apis: window.customApis || null,
+  };
+}
+
+// 应用并发测试表单
+function applyConcurrency(d) {
+  if (!d) return;
+  document.getElementById("cfgBaseUrl").value = d.base_url || "";
+  document.getElementById("cfgStudyUid").value = d.study_uid || "";
+  document.getElementById("cfgSeriesUid").value = d.series_uid || "";
+  document.getElementById("cfgPassword").value = d.password || "";
+  document.getElementById("cfgAccounts").value = d.accounts_text || "";
+  document.getElementById("users").value = d.users || 20;
+  document.getElementById("observe").value = d.observe || 120;
+  window.customApis = d.custom_apis || null;
+  // 更新账号数显示
+  const accounts = (d.accounts_text || "").split("\n").filter(s => s.trim());
+  document.getElementById("cfgCount").textContent = accounts.length;
+}
+
+// 收集自动化测试表单
+function collectAuto() {
+  return {
+    base_url: document.getElementById("autoBaseUrl").value.trim(),
+    login_url: document.getElementById("autoLoginUrl").value.trim(),
+    headless: document.getElementById("autoHeadless").checked,
+    accounts: collectAccounts(),
+  };
+}
+
+// 应用自动化测试表单
+function applyAuto(d) {
+  if (!d) return;
+  document.getElementById("autoBaseUrl").value = d.base_url || "";
+  document.getElementById("autoLoginUrl").value = d.login_url || "";
+  document.getElementById("autoHeadless").checked = d.headless !== false;
+  // 回填账号列表
+  const list = document.getElementById("autoAccounts");
+  list.innerHTML = "";
+  const accounts = d.accounts || [];
+  if (accounts.length) {
+    for (const a of accounts) addAccountRow(a);
+  } else {
+    addAccountRow();
+  }
+}
+
+// 添加账号行
+function addAccountRow(acc) {
+  acc = acc || { role: "", account: "", password: "" };
+  const list = document.getElementById("autoAccounts");
+  const row = document.createElement("div");
+  row.className = "account-row";
+  row.innerHTML = `
+    <input class="acc-role" placeholder="角色名，如 超级管理员" value="${escapeHtml(acc.role || "")}">
+    <input class="acc-name" placeholder="账号" value="${escapeHtml(acc.account || "")}">
+    <input class="acc-pwd" placeholder="密码" value="${escapeHtml(acc.password || "")}">
+    <button class="acc-del" onclick="this.parentElement.remove()">删除</button>`;
+  list.appendChild(row);
+}
+
+// 收集账号列表
+function collectAccounts() {
+  const accounts = [];
+  document.querySelectorAll("#autoAccounts .account-row").forEach(row => {
+    const role = row.querySelector(".acc-role").value.trim();
+    const account = row.querySelector(".acc-name").value.trim();
+    const password = row.querySelector(".acc-pwd").value;
+    if (role && account) accounts.push({ role, account, password });
+  });
+  return accounts;
+}
+
+const MODULE_COLLECTORS = {
+  single: collectSingle,
+  multi: collectMulti,
+  concurrency: collectConcurrency,
+  auto: collectAuto,
+};
+const MODULE_APPLIERS = {
+  single: applySingle,
+  multi: applyMulti,
+  concurrency: applyConcurrency,
+  auto: applyAuto,
+};
+
+// 保存当前模块的表单数据到服务器（追加一条历史记录）
+async function saveModule(module) {
+  const collect = MODULE_COLLECTORS[module];
+  if (!collect) return;
+  const data = collect();
+  const name = await askName();
+  if (name === null) return; // 用户取消
+  try {
+    const res = await fetch("/api/saved-tests", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ module, name, data })
+    });
+    const r = await res.json();
+    if (r.ok) {
+      flashSaved(module, "已保存");
+      loadHistory(module);
+    } else {
+      alert(r.msg || "保存失败");
+    }
+  } catch (e) {
+    alert("保存失败：" + e);
+  }
+}
+
+// 弹出自定义命名输入框，返回名称（取消返回 null）
+function askName() {
+  return new Promise((resolve) => {
+    const mask = document.createElement("div");
+    mask.className = "modal-mask";
+    mask.innerHTML = `
+      <div class="modal-box">
+        <h3>给这条记录起个名字</h3>
+        <input type="text" placeholder="留空则用当前时间" />
+        <div class="modal-actions">
+          <button class="btn2" id="askNameCancel">取消</button>
+          <button id="askNameOk">保存</button>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    const input = mask.querySelector("input");
+    input.focus();
+    const done = (val) => {
+      mask.remove();
+      resolve(val);
+    };
+    mask.querySelector("#askNameOk").onclick = () => done(input.value.trim());
+    mask.querySelector("#askNameCancel").onclick = () => done(null);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") done(input.value.trim());
+      if (e.key === "Escape") done(null);
+    });
+    mask.addEventListener("click", (e) => {
+      if (e.target === mask) done(null);
+    });
+  });
+}
+
+// 从服务器加载该模块的历史记录列表并渲染
+async function loadHistory(module) {
+  try {
+    const res = await fetch("/api/saved-tests");
+    const r = await res.json();
+    if (!r.ok) return;
+    renderHistory(module, (r.saved || {})[module]);
+  } catch (e) {
+    // 忽略加载失败
+  }
+}
+
+// 「加载上次」按钮：加载最新一条历史记录
+async function loadModule(module) {
+  const apply = MODULE_APPLIERS[module];
+  if (!apply) return;
+  try {
+    const res = await fetch("/api/saved-tests");
+    const r = await res.json();
+    if (!r.ok) { alert("加载失败"); return; }
+    const records = (r.saved || {})[module];
+    const list = Array.isArray(records) ? records : [];
+    if (!list.length) { alert("该模块还没有保存记录"); return; }
+    apply(list[0].data);
+    flashSaved(module, `已加载：${list[0].name || "最新记录"}`);
+    switchSubTab(module, "test");
+    highlightForm(module);
+  } catch (e) {
+    alert("加载失败：" + e);
+  }
+}
+
+// 高亮表单，让用户看到回填结果
+function highlightForm(module) {
+  const formMap = {
+    single: "tab-single",
+    multi: "tab-multi",
+    concurrency: "tab-concurrency",
+    auto: "tab-auto",
+  };
+  const tab = document.getElementById(formMap[module]);
+  if (!tab) return;
+  const form = tab.querySelector(".api-test-form, .config-panel");
+  if (!form) return;
+  form.scrollIntoView({ behavior: "smooth", block: "start" });
+  form.classList.remove("flash-highlight");
+  void form.offsetWidth; // 强制重排以重新触发动画
+  form.classList.add("flash-highlight");
+  setTimeout(() => form.classList.remove("flash-highlight"), 1300);
+}
+
+// 渲染历史记录列表
+function renderHistory(module, records) {
+  const el = document.getElementById(module + "History");
+  if (!el) return;
+  const list = Array.isArray(records) ? records : [];
+  if (!list.length) {
+    el.innerHTML = `<div class="history-empty">暂无保存记录，点「保存」即可把当前配置存为历史</div>`;
+    return;
+  }
+  el.innerHTML = "";
+  for (const rec of list) {
+    const item = document.createElement("div");
+    item.className = "history-item";
+    const summary = summarizeRecord(module, rec.data);
+    item.innerHTML = `
+      <span class="h-name">${escapeHtml(rec.name || "未命名")}</span>
+      <span class="h-time">${escapeHtml(rec.time || "")}</span>
+      <span class="h-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</span>
+      <button class="h-btn" data-id="${escapeHtml(rec.id)}">加载</button>
+      <button class="h-btn del" data-id="${escapeHtml(rec.id)}">删除</button>`;
+    // 点击条目任意位置（除删除按钮外）都触发加载
+    item.addEventListener("click", (e) => {
+      if (e.target.closest(".h-btn.del")) return;
+      applyHistoryRecord(module, rec.data);
+    });
+    item.querySelector(".h-btn.del").onclick = () => deleteHistory(module, rec.id);
+    el.appendChild(item);
+  }
+}
+
+// 生成记录摘要
+function summarizeRecord(module, d) {
+  if (!d) return "";
+  if (module === "single") {
+    return `${d.method || "GET"} ${d.url || ""}`;
+  }
+  if (module === "multi") {
+    const n = (d.apis || []).length;
+    return `${d.base_url || ""} · ${n} 个接口`;
+  }
+  if (module === "concurrency") {
+    const accounts = (d.accounts_text || "").split("\n").filter(s => s.trim()).length;
+    return `${d.base_url || ""} · ${d.users || 0} 用户 · ${accounts} 账号`;
+  }
+  if (module === "auto") {
+    const steps = (d.steps_text || "").split("\n").filter(s => s.trim()).length;
+    return `${d.base_url || ""} · ${steps} 个步骤`;
+  }
+  return "";
+}
+
+// 应用某条历史记录到表单
+function applyHistoryRecord(module, data) {
+  const apply = MODULE_APPLIERS[module];
+  if (!apply) return;
+  apply(data);
+  flashSaved(module, "已加载历史记录");
+  // 切回「测试」子 tab，让用户看到回填结果
+  switchSubTab(module, "test");
+  highlightForm(module);
+}
+
+// 删除某条历史记录
+async function deleteHistory(module, recordId) {
+  const ok = await askConfirm("确定删除这条记录？");
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/saved-tests/${module}/${recordId}`, { method: "DELETE" });
+    const r = await res.json();
+    if (r.ok) {
+      loadHistory(module);
+    } else {
+      alert(r.msg || "删除失败");
+    }
+  } catch (e) {
+    alert("删除失败：" + e);
+  }
+}
+
+// 弹出自定义确认框，返回 true/false
+function askConfirm(text) {
+  return new Promise((resolve) => {
+    const mask = document.createElement("div");
+    mask.className = "modal-mask";
+    mask.innerHTML = `
+      <div class="modal-box">
+        <h3>${escapeHtml(text)}</h3>
+        <div class="modal-actions">
+          <button class="btn2" id="askConfirmCancel">取消</button>
+          <button class="stop" id="askConfirmOk">删除</button>
+        </div>
+      </div>`;
+    document.body.appendChild(mask);
+    const done = (val) => {
+      mask.remove();
+      resolve(val);
+    };
+    mask.querySelector("#askConfirmOk").onclick = () => done(true);
+    mask.querySelector("#askConfirmCancel").onclick = () => done(false);
+    mask.addEventListener("click", (e) => {
+      if (e.target === mask) done(false);
+    });
+  });
+}
+
+// 顶部 toast 提示
+let toastTimer = null;
+function showToast(text, isError) {
+  let toast = document.getElementById("globalToast");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.id = "globalToast";
+    toast.className = "toast";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = text;
+  toast.classList.toggle("error", !!isError);
+  // 重新触发过渡动画
+  toast.classList.remove("show");
+  void toast.offsetWidth;
+  toast.classList.add("show");
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 2000);
+}
+
+// 在对应模块显示短暂的保存/加载提示（改为顶部 toast）
+function flashSaved(module, text) {
+  showToast(text);
+}
+
+// ---- 自动化测试 ----
+// 上传 Excel 测试用例，自动识别步骤
+// ---- UI 自动化测试 ----
+let uiCases = [];
+
+async function uploadAutoExcel() {
+  const fileInput = document.getElementById("autoExcel");
+  const file = fileInput.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById("autoStatus");
+  statusEl.textContent = "解析 Excel 中…";
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await fetch("/api/ui-test/upload", {
+      method: "POST", body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.msg, true); statusEl.textContent = ""; return; }
+    uiCases = data.cases || [];
+    statusEl.textContent = `已识别 ${data.count} 条用例`;
+    renderCaseList();
+  } catch (e) {
+    statusEl.textContent = "解析失败";
+    showToast("解析失败：" + e, true);
+  }
+}
+
+// 渲染用例列表
+function renderCaseList() {
+  const el = document.getElementById("autoCaseList");
+  if (!uiCases.length) {
+    el.innerHTML = "尚未上传用例";
+    return;
+  }
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+    <span>用例总数：<b>${uiCases.length}</b></span>
+  </div>`;
+  for (const c of uiCases) {
+    const steps = (c.steps || []).join("<br>");
+    html += `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
+      <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.id ? c.id + " · " : "")}${escapeHtml(c.name)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">步骤：<br>${escapeHtml(steps)}</div>
+      <div style="font-size:12px;color:var(--yellow)">预期：${escapeHtml(c.expect || "无")}</div>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
+async function runAutoTest() {
+  const statusEl = document.getElementById("autoStatus");
+  const resultEl = document.getElementById("autoResult");
+  if (!uiCases.length) { showToast("请先上传 Excel 用例", true); return; }
+  statusEl.textContent = "执行中…";
+  resultEl.innerHTML = "";
+  window._uiResults = [];
+  document.getElementById("btnUiStop").disabled = false;
+  const payload = {
+    base_url: document.getElementById("autoBaseUrl").value.trim(),
+    login_url: document.getElementById("autoLoginUrl").value.trim(),
+    headless: document.getElementById("autoHeadless").checked,
+    accounts: collectAccounts().reduce((m, a) => {
+      m[a.role] = { account: a.account, password: a.password };
+      return m;
+    }, {}),
+    cases: uiCases,
+  };
+  try {
+    const res = await fetch("/api/ui-test/start", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.msg, true); statusEl.textContent = ""; return; }
+    showToast(data.msg);
+    // 兜底轮询：若 WebSocket 断开，仍能拿到最终结果
+    pollUiTest();
+  } catch (e) {
+    statusEl.textContent = "执行失败";
+    showToast("执行失败：" + e, true);
+  }
+}
+
+async function stopUiTest() {
+  await fetch("/api/ui-test/stop", { method: "POST" });
+}
+
+// 兜底轮询 UI 测试状态（WebSocket 正常时由事件驱动，这里仅作保险）
+async function pollUiTest() {
+  const statusEl = document.getElementById("autoStatus");
+  for (let i = 0; i < 1800; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+    const res = await fetch("/api/ui-test/status");
+    const data = await res.json();
+    if (!data.running) {
+      document.getElementById("btnUiStop").disabled = true;
+      // 若 WebSocket 事件没更新结果，则拉取一次
+      if (!window._uiResults || !window._uiResults.length) {
+        const done = await fetch("/api/ui-test/results");
+        const r = await done.json();
+        if (r.ok && r.results) {
+          window._uiResults = r.results;
+          renderUiResults(r.results);
+          const passed = r.results.filter(x => x.结果 === "✅ 通过").length;
+          statusEl.textContent = `完成：${passed}/${r.results.length} 条通过`;
+        }
+      }
+      return;
+    }
+  }
+  statusEl.textContent = "执行超时";
+}
+
+// 渲染 UI 测试结果
+function renderUiResults(results) {
+  const el = document.getElementById("autoResult");
+  if (!results || !results.length) {
+    el.innerHTML = `<span style="color:var(--muted)">无结果</span>`;
+    return;
+  }
+  const passed = results.filter(x => x.结果 === "✅ 通过").length;
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+    <span>用例总数：<b>${results.length}</b></span>
+    <span>通过：<b style="color:var(--green)">${passed}</b></span>
+    <span>失败：<b style="color:var(--red)">${results.length - passed}</b></span>
+    <span>通过率：<b>${results.length ? Math.round(passed / results.length * 100) : 0}%</b></span>
+  </div>`;
+  for (const r of results) {
+    const ok = r.结果 === "✅ 通过";
+    const color = ok ? "var(--green)" : "var(--red)";
+    html += `<div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="font-weight:700;margin-bottom:6px">${escapeHtml(r.id ? r.id + " · " : "")}${escapeHtml(r.name)} <span style="color:${color}">${r.结果}</span></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:6px">耗时：${r["耗时(秒)"]} 秒</div>`;
+    if (r.预期) {
+      html += `<div style="font-size:12px;color:var(--yellow);margin-bottom:6px">预期：${escapeHtml(r.预期)}</div>`;
+    }
+    if (r.实际) {
+      html += `<div style="font-size:12px;color:${ok ? "var(--green)" : "var(--red)"};margin-bottom:6px">实际：${escapeHtml(r.实际)}</div>`;
+    }
+    if (r.步骤日志 && r.步骤日志.length) {
+      html += `<div style="font-size:12px;margin-bottom:4px">步骤明细：</div>`;
+      for (const s of r.步骤日志) {
+        const sColor = s.结果 === "✅" ? "var(--green)" : s.结果 === "❌" ? "var(--red)" : "var(--yellow)";
+        html += `<div style="font-size:12px;color:var(--muted);margin-bottom:2px">
+          <span style="color:${sColor}">${s.结果}</span> ${escapeHtml(s.步骤)}${s.说明 ? " — " + escapeHtml(s.说明) : ""}
+        </div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ---- 录制 ----
+let recordedRequests = [];
+
+function addRecordLog(cls, text) {
+  const log = document.getElementById("recordLog");
+  const row = document.createElement("div");
+  row.className = "row " + cls;
+  const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  row.innerHTML = `<span class="t">${time}</span>${text}`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+async function startRecord() {
+  const url = document.getElementById("recordUrl").value.trim();
+  if (!url) { alert("请输入起始 URL"); return; }
+  const loginFirst = document.getElementById("recordLoginFirst").checked;
+  const account = document.getElementById("recordAccount").value.trim();
+  const password = document.getElementById("recordPassword").value;
+  const res = await fetch("/api/record/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, login_first: loginFirst, account, password })
+  });
+  const data = await res.json();
+  if (!data.ok) { alert(data.msg); return; }
+  document.getElementById("recordLog").innerHTML = "";
+  addRecordLog("info", `录制已启动，请在浏览器中操作（起始页：${url}${loginFirst ? "，已先登录" : ""}）`);
+  document.getElementById("btnRecordStart").disabled = true;
+  document.getElementById("btnRecordStop").disabled = false;
+  document.getElementById("recordStatus").textContent = "录制中…";
+}
+
+async function stopRecord() {
+  const res = await fetch("/api/record/stop", { method: "POST" });
+  const data = await res.json();
+  if (!data.ok) { alert(data.msg); return; }
+  recordedRequests = data.requests || [];
+  document.getElementById("btnRecordStart").disabled = false;
+  document.getElementById("btnRecordStop").disabled = true;
+  document.getElementById("recordStatus").textContent = `已停止，捕获 ${data.count} 个请求`;
+  addRecordLog("info", `录制结束，共捕获 ${data.count} 个请求`);
+  for (const r of recordedRequests) {
+    addRecordLog("req", `${r.method} ${r.url}`);
+  }
+}
+
+// 把录制的请求导入到多接口测试
+function importRecorded() {
+  if (!recordedRequests.length) { alert("没有可导入的请求，请先录制"); return; }
+  const list = document.getElementById("multiApiList");
+  list.innerHTML = "";
+  for (const r of recordedRequests) {
+    // 只导入 API 请求（xhr/fetch），跳过静态资源
+    const url = r.url;
+    if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?|$)/i.test(url)) continue;
+    let name = url;
+    try {
+      name = new URL(url).pathname;
+    } catch (e) {}
+    addApiRow({ name, method: r.method, url, body: r.body || "" });
+  }
+  switchTab("multi");
+  alert("已导入到多接口测试");
+}
+
+// 把录制的请求导入到并发测试（作为自定义接口列表）
+function importRecordedToConcurrency() {
+  if (!recordedRequests.length) { alert("没有可导入的请求，请先录制"); return; }
+  const apis = [];
+  for (const r of recordedRequests) {
+    const url = r.url;
+    if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?|$)/i.test(url)) continue;
+    let name = url;
+    try {
+      name = new URL(url).pathname;
+    } catch (e) {}
+    apis.push({ name, method: r.method, url, body: r.body || "" });
+  }
+  if (!apis.length) { alert("没有可导入的 API 请求"); return; }
+  // 保存到全局，供并发测试使用
+  window.customApis = apis;
+  switchTab("concurrency");
+  alert(`已导入 ${apis.length} 个接口到并发测试，点击「全接口测试」即可按此列表压测`);
+}
+
+// ---- 单接口测试 ----
+// 常用接口模板：用于快速填充 URL 和请求体（通过「快速填充」按钮使用）
+const SINGLE_API_TEMPLATES = {
+  login: { method: "POST", path: "/api/v1/user/login",
+           body: '{"name":"test","password":"<sha256>"}' },
+  checkLogin: { method: "GET", path: "/api/v1/user/checkLogin", body: "" },
+  studies: { method: "GET", path: "/api/v1/studies?studyInstanceUID={study_uid}&taskType=xa_brain&product=XA_BRAIN", body: "" },
+  dcp: { method: "GET", path: "/api/repacs/series/{series_uid}/dcp", body: "" },
+  thumbnail: { method: "GET", path: "/RESULT/thumbnail/{series_uid}/thumbnail.jpg", body: "" },
+  frame: { method: "GET", path: "/xa_brain_encrypt/XA-00001/{study_uid}/{series_uid}/{sop_uid}", body: "" },
+};
+
+// 快速填充：根据模板 key 填充方法/URL/请求体
+function fillSingleTemplate(key) {
+  const tpl = SINGLE_API_TEMPLATES[key];
+  if (!tpl) return;
+  document.getElementById("singleMethod").value = tpl.method;
+  const base = (document.getElementById("cfgBaseUrl").value || "").trim();
+  const study = (document.getElementById("cfgStudyUid").value || "").trim();
+  const series = (document.getElementById("cfgSeriesUid").value || "").trim();
+  const pwd = (document.getElementById("cfgPassword").value || "").trim();
+  let path = tpl.path
+    .replace("{study_uid}", study)
+    .replace("{series_uid}", series)
+    .replace("{sop_uid}", "1.2.826.0.1.3680043.8.498.13165411462314731926996403093554031791");
+  document.getElementById("singleUrl").value = base + path;
+  // 请求体：把 <sha256> 占位符替换成密码的 SHA256 哈希
+  let body = tpl.body;
+  if (body.includes("<sha256>")) {
+    sha256Hex(pwd).then(hash => {
+      document.getElementById("singleBody").value = body.replace("<sha256>", hash);
+    });
+  } else {
+    document.getElementById("singleBody").value = body;
+  }
+}
+
+// 用 Web Crypto API 计算 SHA256 十六进制
+async function sha256Hex(str) {
+  const data = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// 切换 Content-Type 时更新请求体占位提示
+function onSingleContentTypeChange() {
+  const ct = document.getElementById("singleContentType").value;
+  const bodyEl = document.getElementById("singleBody");
+  const examples = {
+    "application/json": '{"name":"test","password":"..."}',
+    "application/x-www-form-urlencoded": "name=test&password=123qwe",
+    "text/plain": "hello world",
+    "application/xml": "<user><name>test</name></user>",
+    "text/xml": "<user><name>test</name></user>",
+  };
+  bodyEl.placeholder = examples[ct] || "";
+}
+
+async function runSingleTest() {
+  const url = document.getElementById("singleUrl").value.trim();
+  const method = document.getElementById("singleMethod").value;
+  const body = document.getElementById("singleBody").value.trim();
+  const content_type = document.getElementById("singleContentType").value;
+  const repeat = parseInt(document.getElementById("singleRepeat").value) || 1;
+  const statusEl = document.getElementById("singleStatus");
+  const logEl = document.getElementById("singleLog");
+  if (!url) { alert("请输入请求 URL"); return; }
+  statusEl.textContent = "请求中…";
+  logEl.innerHTML = "";
+  const t0 = performance.now();
+  addSingleLog("info", `→ 发送请求：${method} ${url}（循环 ${repeat} 次）`);
+  if (body) addSingleLog("info", `→ 请求体 (${content_type})：${body}`);
+  try {
+    const res = await fetch("/api/proxy", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, method, body: method === "POST" ? body : "", content_type, repeat })
+    });
+    const data = await res.json();
+    const ms = Math.round(performance.now() - t0);
+    statusEl.textContent = `完成，耗时 ${ms}ms`;
+    renderSingleLog(data);
+    renderSingleAggregate(data);
+  } catch (e) {
+    statusEl.textContent = "请求失败";
+    addSingleLog("err", `✗ 请求失败：${e}`);
+  }
+}
+
+// 单接口聚合报告（横向表格：指标为行头，值为列）
+function renderSingleAggregate(data) {
+  const el = document.getElementById("singleAggregate");
+  if (!data.ok) {
+    el.innerHTML = `<span style="color:var(--red)">请求失败：${data.error || data.msg || "未知错误"}</span>`;
+    return;
+  }
+  const req = data.request || {};
+  const resp = data.response || {};
+  const ok = resp.status < 400;
+  const statusColor = ok ? "var(--green)" : "var(--red)";
+  const times = resp.times || [];
+  const timesRows = times.length
+    ? times.map((t, i) => `<tr><td>第 ${i + 1} 次</td><td class="num">${t} ms</td></tr>`).join("")
+    : `<tr><td colspan="2">-</td></tr>`;
+  el.innerHTML = `
+    <table class="summary-table">
+      <thead><tr><th>URL</th><th>主机</th><th>端口</th><th>方法</th><th>路径</th><th>状态码</th><th>结果</th><th>循环次数</th><th>平均耗时</th><th>最小耗时</th><th>最大耗时</th><th>大小</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>${req.url}</td>
+          <td>${req.host}</td>
+          <td class="num">${req.port}</td>
+          <td style="color:var(--cyan)">${req.method}</td>
+          <td>${req.path}${req.query ? "?" + req.query : ""}</td>
+          <td class="num" style="color:${statusColor}">${resp.status}</td>
+          <td style="color:${statusColor}">${ok ? "✅ 通过" : "❌ 失败"}</td>
+          <td class="num">${resp.repeat ?? 1}</td>
+          <td class="num">${resp.avg_ms ?? resp.elapsed_ms} ms</td>
+          <td class="num">${resp.min_ms ?? resp.elapsed_ms} ms</td>
+          <td class="num">${resp.max_ms ?? resp.elapsed_ms} ms</td>
+          <td class="num">${resp.size} 字节</td>
+        </tr>
+      </tbody>
+    </table>
+    <table class="summary-table" style="margin-top:12px">
+      <thead><tr><th>执行次数</th><th>耗时</th></tr></thead>
+      <tbody>${timesRows}</tbody>
+    </table>`;
+}
+
+// 实时日志：逐行输出请求/响应信息
+function addSingleLog(cls, text) {
+  const log = document.getElementById("singleLog");
+  const row = document.createElement("div");
+  row.className = "row " + cls;
+  const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  row.innerHTML = `<span class="t">${time}</span>${text}`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+function renderSingleLog(data) {
+  if (!data.ok) {
+    addSingleLog("err", `✗ 请求失败：${data.error || data.msg || "未知错误"}`);
+    return;
+  }
+  const req = data.request || {};
+  const resp = data.response || {};
+  const statusColor = resp.status < 400 ? "var(--green)" : "var(--red)";
+  addSingleLog("info", `← 响应：HTTP ${resp.status} · ${resp.elapsed_ms} ms · ${resp.size} 字节`);
+  addSingleLog("info", `← 主机：${req.host}  端口：${req.port}  路径：${req.path}${req.query ? "?" + req.query : ""}`);
+  if (resp.headers) {
+    addSingleLog("info", `← 响应头：`);
+    for (const [k, v] of Object.entries(resp.headers)) {
+      addSingleLog("resp", `    ${k}: ${v}`);
+    }
+  }
+  addSingleLog("info", `← 响应体：`);
+  const bodyText = formatBody(resp.body);
+  // 响应体按行输出，保持可读性
+  for (const line of bodyText.split("\n")) {
+    addSingleLog("resp", `    ${line}`);
+  }
+  addSingleLog(resp.status < 400 ? "resp" : "err",
+    resp.status < 400 ? "✅ 请求成功" : "❌ 请求失败");
+}
+
+function formatHeaders(headers) {
+  if (!headers) return "";
+  return Object.entries(headers).map(([k, v]) => `${k}: ${v}`).join("\n");
+}
+
+function formatBody(body) {
+  if (body === null || body === undefined) return "";
+  if (typeof body === "object") return JSON.stringify(body, null, 2);
+  return String(body);
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// ---- 多接口测试 ----
+// 添加一个接口行
+function addApiRow(api) {
+  api = api || { name: "", method: "GET", url: "", body: "", content_type: "application/json" };
+  const list = document.getElementById("multiApiList");
+  const row = document.createElement("div");
+  row.className = "api-row";
+  const ctypeOptions = ["application/json", "application/x-www-form-urlencoded",
+                        "text/plain", "application/xml", "text/xml"]
+    .map(ct => `<option ${api.content_type === ct ? "selected" : ""}>${ct}</option>`).join("");
+  row.innerHTML = `
+    <input class="api-name" placeholder="名称" value="${escapeHtml(api.name || "")}">
+    <select class="api-method">
+      <option ${api.method === "POST" ? "selected" : ""}>GET</option>
+      <option ${api.method === "POST" ? "selected" : ""}>POST</option>
+    </select>
+    <input class="api-url" placeholder="URL，如 /api/v1/user/login，支持 {study_uid} {series_uid} {account} {password_hash}" value="${escapeHtml(api.url || "")}">
+    <select class="api-ctype" onchange="onApiCtypeChange(this)">${ctypeOptions}</select>
+    <input class="api-body" placeholder="请求体(可选)" value="${escapeHtml(api.body || "")}">
+    <button class="api-del" onclick="this.parentElement.remove()">删除</button>`;
+  list.appendChild(row);
+}
+
+// 切换接口行的 Content-Type 时更新请求体占位提示
+function onApiCtypeChange(sel) {
+  const row = sel.parentElement;
+  const bodyEl = row.querySelector(".api-body");
+  const examples = {
+    "application/json": '{"name":"test","password":"..."}',
+    "application/x-www-form-urlencoded": "name=test&password=123qwe",
+    "text/plain": "hello world",
+    "application/xml": "<user><name>test</name></user>",
+    "text/xml": "<user><name>test</name></user>",
+  };
+  bodyEl.placeholder = examples[sel.value] || "";
+}
+
+// 从接口行收集接口列表
+function collectApis() {
+  const apis = [];
+  document.querySelectorAll("#multiApiList .api-row").forEach(row => {
+    const name = row.querySelector(".api-name").value.trim();
+    const method = row.querySelector(".api-method").value;
+    const url = row.querySelector(".api-url").value.trim();
+    const body = row.querySelector(".api-body").value.trim();
+    const content_type = row.querySelector(".api-ctype").value;
+    if (url) apis.push({ name: name || url, method, url, body, content_type });
+  });
+  return apis;
+}
+
+async function runMultiTest() {
+  const statusEl = document.getElementById("multiStatus");
+  const logEl = document.getElementById("multiLog");
+  statusEl.textContent = "测试中…";
+  logEl.innerHTML = "";
+  const apis = collectApis();
+  if (!apis.length) { alert("请至少添加一个接口"); return; }
+  const payload = {
+    base_url: document.getElementById("multiBaseUrl").value.trim(),
+    study_uid: document.getElementById("multiStudyUid").value.trim(),
+    series_uid: document.getElementById("multiSeriesUid").value.trim(),
+    account: document.getElementById("multiAccount").value.trim(),
+    password: document.getElementById("multiPassword").value,
+    repeat: parseInt(document.getElementById("multiRepeat").value) || 1,
+    apis,
+  };
+  addMultiLog("info", `开始多接口测试，目标：${payload.base_url}，共 ${apis.length} 个接口`);
+  try {
+    const res = await fetch("/api/multi-test", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    statusEl.textContent = `完成：${data.passed}/${data.total} 个接口通过`;
+    renderMultiLog(data);
+    renderMultiAggregate(data);
+  } catch (e) {
+    statusEl.textContent = "测试失败";
+    addMultiLog("err", `✗ 测试失败：${e}`);
+  }
+}
+
+// 多接口聚合报告（横向表格：接口为行，指标为列）
+function renderMultiAggregate(data) {
+  const el = document.getElementById("multiAggregate");
+  if (!data.ok) {
+    el.innerHTML = `<span style="color:var(--red)">测试失败：${data.msg || "未知错误"}</span>`;
+    return;
+  }
+  const results = data.results || [];
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">
+    <span>接口总数：<b>${data.total}</b></span>
+    <span>通过：<b style="color:var(--green)">${data.passed}</b></span>
+    <span>失败：<b style="color:var(--red)">${data.total - data.passed}</b></span>
+    <span>通过率：<b>${data.total ? Math.round(data.passed / data.total * 100) : 0}%</b></span>
+  </div>`;
+
+  // 横向表格：接口为行，指标为列
+  html += `<div style="overflow-x:auto">
+    <table class="summary-table" style="min-width:1400px">
+    <thead><tr>
+      <th style="white-space:nowrap">接口</th>
+      <th style="white-space:nowrap;min-width:260px">URL</th>
+      <th style="white-space:nowrap">主机</th>
+      <th style="white-space:nowrap">端口</th>
+      <th style="white-space:nowrap">方法</th>
+      <th style="white-space:nowrap;min-width:220px">路径</th>
+      <th style="white-space:nowrap">状态码</th>
+      <th style="white-space:nowrap">结果</th>
+      <th style="white-space:nowrap">循环次数</th>
+      <th style="white-space:nowrap">平均耗时(ms)</th>
+      <th style="white-space:nowrap">最小耗时(ms)</th>
+      <th style="white-space:nowrap">最大耗时(ms)</th>
+      <th style="white-space:nowrap">大小(字节)</th>
+      <th style="white-space:nowrap">每次执行耗时</th>
+    </tr></thead>
+    <tbody>`;
+  for (const r of results) {
+    const req = r.请求 || {};
+    const resp = r.响应 || {};
+    const ok = (resp.状态码 || 0) < 400;
+    const statusColor = ok ? "var(--green)" : "var(--red)";
+    const times = resp["每次耗时(ms)"] || [];
+    const timesHtml = times.length
+      ? times.map((t, i) => `第${i + 1}次 ${t}ms`).join("<br>")
+      : "-";
+    html += `<tr>
+      <td style="white-space:nowrap">${r.接口}</td>
+      <td style="word-break:break-all">${req.url || ""}</td>
+      <td style="white-space:nowrap">${req.host || ""}</td>
+      <td class="num">${req.port || ""}</td>
+      <td style="color:var(--cyan);white-space:nowrap">${req.method || ""}</td>
+      <td style="word-break:break-all">${req.path || ""}${req.query ? "?" + req.query : ""}</td>
+      <td class="num" style="color:${statusColor};white-space:nowrap">${resp.状态码 ?? ""}</td>
+      <td style="color:${statusColor};white-space:nowrap">${r.结果}</td>
+      <td class="num">${resp.循环次数 ?? 1}</td>
+      <td class="num">${resp["平均耗时(ms)"] ?? ""}</td>
+      <td class="num">${resp["最小耗时(ms)"] ?? ""}</td>
+      <td class="num">${resp["最大耗时(ms)"] ?? ""}</td>
+      <td class="num">${resp.大小 ?? ""}</td>
+      <td style="white-space:nowrap">${timesHtml}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  el.innerHTML = html;
+}
+
+function addMultiLog(cls, text) {
+  const log = document.getElementById("multiLog");
+  const row = document.createElement("div");
+  row.className = "row " + cls;
+  const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+  row.innerHTML = `<span class="t">${time}</span>${text}`;
+  log.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+}
+
+// 渲染多接口结果（实时日志风格，每个接口一段）
+function renderMultiLog(data) {
+  if (!data.ok) {
+    addMultiLog("err", `✗ 测试失败：${data.msg || "未知错误"}`);
+    return;
+  }
+  for (const r of data.results || []) {
+    const req = r.请求 || {};
+    const resp = r.响应 || {};
+    const ok = (resp.状态码 || 0) < 400;
+    addMultiLog("info", "");
+    addMultiLog("info", `━━━ ${r.接口} ━━━ ${r.结果}`);
+    addMultiLog("req", `→ ${req.method || ""} ${req.url || ""}`);
+    addMultiLog("info", `→ 主机：${req.host || ""}  端口：${req.port || ""}  路径：${req.path || ""}${req.query ? "?" + req.query : ""}`);
+    if (req.body) addMultiLog("info", `→ 请求体：${req.body}`);
+    addMultiLog(ok ? "resp" : "err", `← HTTP ${resp.状态码 ?? ""} · 平均 ${resp["平均耗时(ms)"] ?? ""} ms · 最大 ${resp["最大耗时(ms)"] ?? ""} ms · 最小 ${resp["最小耗时(ms)"] ?? ""} ms · ${resp.大小 ?? ""} 字节`);
+    const bodyText = formatBody(resp.响应体);
+    if (bodyText) {
+      addMultiLog("info", `← 响应体：`);
+      for (const line of bodyText.split("\n")) {
+        addMultiLog("resp", `    ${line}`);
+      }
+    }
+  }
+  addMultiLog("info", "");
+  addMultiLog("info", `✅ 测试完成：${data.passed}/${data.total} 个接口通过`);
+}
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}/ws`);
@@ -319,8 +1803,96 @@ function handleEvent(ev) {
     renderSummary(ev.states);
     addLog("info", "测试完成，结果已汇总");
     loadEvidence();
+    loadAggregate();
+  }
+  else if (ev.type === "ui_case_start") {
+    // UI 测试：某条用例开始执行
+    const statusEl = document.getElementById("autoStatus");
+    if (statusEl) statusEl.textContent = `执行中…（${ev.index + 1}/${ev.total}）${ev.name || ""}`;
+  }
+  else if (ev.type === "ui_case_result") {
+    // UI 测试：某条用例执行完成，实时追加结果
+    if (!window._uiResults) window._uiResults = [];
+    window._uiResults.push(ev.result);
+    renderUiResults(window._uiResults);
+    const statusEl = document.getElementById("autoStatus");
+    if (statusEl) statusEl.textContent = `执行中…（${ev.index + 1}/${ev.total}）`;
+  }
+  else if (ev.type === "ui_test_done") {
+    // UI 测试：全部完成
+    window._uiResults = ev.results || [];
+    renderUiResults(window._uiResults);
+    const statusEl = document.getElementById("autoStatus");
+    const passed = window._uiResults.filter(x => x.结果 === "✅ 通过").length;
+    if (statusEl) statusEl.textContent = `完成：${passed}/${window._uiResults.length} 条通过`;
+    const stopBtn = document.getElementById("btnUiStop");
+    if (stopBtn) stopBtn.disabled = true;
   }
   updateStats();
+}
+
+async function loadAggregate() {
+  const res = await fetch("/api/aggregate");
+  const data = await res.json();
+  if (!data.ok) return;
+  const el = document.getElementById("aggregate");
+  let html = "";
+
+  // 总耗时
+  html += `<div style="margin-bottom:12px">
+    <span>总耗时：<b style="color:var(--cyan)">${data["总耗时(秒)"] ?? 0} 秒</b></span>
+    <span style="margin-left:16px">用户数：<b>${data.users ?? 0}</b></span>
+  </div>`;
+
+  // 接口汇总表（横向：接口为列，指标为行）
+  const apis = data.接口汇总 || [];
+  if (apis.length) {
+    const metrics = [
+      ["样本数", "样本数"],
+      ["平均值(ms)", "平均值"],
+      ["中位数(ms)", "中位数"],
+      ["最小值(ms)", "最小值"],
+      ["最大值(ms)", "最大值"],
+      ["90%线(ms)", "90%线"],
+      ["95%线(ms)", "95%线"],
+      ["99%线(ms)", "99%线"],
+      ["错误率", "错误率"],
+      ["吞吐量(个/s)", "吞吐量(个/s)"],
+    ];
+    html += `<div style="overflow-x:auto">
+      <table class="summary-table" style="margin-bottom:16px;min-width:800px">
+      <thead><tr><th>指标</th>`;
+    for (const a of apis) {
+      html += `<th>${a.接口}</th>`;
+    }
+    html += `</tr></thead><tbody>`;
+    for (const [label, key] of metrics) {
+      html += `<tr><td>${label}</td>`;
+      for (const a of apis) {
+        let val = a[key] ?? 0;
+        let style = "";
+        if (key === "错误率") {
+          style = `style="color:${val > 0 ? "var(--red)" : "var(--green)"}"`;
+          val = val + "%";
+        }
+        html += `<td class="num" ${style}>${val}</td>`;
+      }
+      html += `</tr>`;
+    }
+    html += `</tbody></table></div>`;
+  }
+
+  // 状态统计
+  const st = data.状态统计 || {};
+  html += `<div style="font-weight:600;margin-bottom:8px">状态统计</div>`;
+  html += `<div style="display:flex;gap:16px;flex-wrap:wrap">
+    <span>✅ 完成：<b style="color:var(--green)">${st.完成 ?? 0}</b></span>
+    <span>⏱ 超时：<b style="color:var(--yellow)">${st.超时 ?? 0}</b></span>
+    <span>❌ 出错：<b style="color:var(--red)">${st.出错 ?? 0}</b></span>
+    <span>🔄 加载中：<b style="color:var(--cyan)">${st.加载中 ?? 0}</b></span>
+  </div>`;
+
+  el.innerHTML = html;
 }
 
 async function loadEvidence() {
@@ -360,8 +1932,9 @@ async function downloadReport() {
 }
 
 function shortUrl(url) {
-  const base = "http://192.168.108.109:8000";
-  let u = url.replace(base, "");
+  // 从配置输入框动态读取 base_url，避免硬编码
+  const base = (document.getElementById("cfgBaseUrl").value || "").trim();
+  let u = base ? url.replace(base, "") : url;
   if (u.length > 70) u = u.slice(0, 70) + "…";
   return u;
 }
@@ -374,7 +1947,7 @@ function addLog(cls, text, tag) {
   let tagHtml = "";
   if (tag) {
     const tagCls = tag === "登录" ? "tag-login" : tag === "图像帧" ? "tag-frame"
-      : (tag === "图像元数据" || tag === "序列数据") ? "tag-meta" : "tag-other";
+      : (tag === "图像元数据" || tag === "序列数据" || tag === "消息令牌") ? "tag-meta" : "tag-other";
     tagHtml = `<span class="tag ${tagCls}">${tag}</span>`;
   }
   row.innerHTML = `<span class="t">${time}</span>${tagHtml}${text}`;
@@ -493,8 +2066,6 @@ function setRunning(r) {
 // ---- 配置录入 ----
 function fillConfigForm(cfg) {
   document.getElementById("cfgBaseUrl").value = cfg.base_url || "";
-  document.getElementById("cfgLoginPath").value = cfg.login_path || "";
-  document.getElementById("cfgViewerPath").value = cfg.viewer_path_template || "";
   document.getElementById("cfgStudyUid").value = cfg.study_uid || "";
   document.getElementById("cfgSeriesUid").value = cfg.series_uid || "";
   document.getElementById("cfgPassword").value = cfg.password || "";
@@ -509,14 +2080,47 @@ async function loadConfig() {
   if (data.ok) {
     fillConfigForm(data.config);
     document.getElementById("cfgSaved").textContent = "";
+    // 配置加载后，同步填充单接口/多接口测试表单
+    syncApiTestForms(data.config);
   }
+}
+
+// 用并发测试页的配置同步填充单接口/多接口测试表单
+function syncApiTestForms(cfg) {
+  const base = cfg.base_url || "";
+  const study = cfg.study_uid || "";
+  const series = cfg.series_uid || "";
+  document.getElementById("multiBaseUrl").value = base;
+  document.getElementById("multiStudyUid").value = study;
+  document.getElementById("multiSeriesUid").value = series;
+  document.getElementById("multiAccount").value = (cfg.accounts || [])[0] || "test";
+  document.getElementById("multiPassword").value = cfg.password || "";
+  // 同步自动化测试表单（UI 测试起始地址、登录页地址）
+  document.getElementById("autoBaseUrl").value = base;
+  document.getElementById("autoLoginUrl").value = base + "/app/center/login";
+  // 初始化账号行（默认一个空行）
+  const accList = document.getElementById("autoAccounts");
+  if (accList && !accList.children.length) {
+    addAccountRow();
+  }
+  // 默认填充接口列表
+  const list = document.getElementById("multiApiList");
+  list.innerHTML = "";
+  addApiRow({ name: "登录", method: "POST", url: "/api/v1/user/login",
+              body: '{"name":"{account}","password":"{password_hash}"}' });
+  addApiRow({ name: "图像元数据", method: "GET",
+              url: "/api/v1/studies?studyInstanceUID={study_uid}&taskType=xa_brain&product=XA_BRAIN" });
+  addApiRow({ name: "序列数据", method: "GET",
+              url: "/api/repacs/series/{series_uid}/dcp" });
+  addApiRow({ name: "缩略图", method: "GET",
+              url: "/RESULT/thumbnail/{series_uid}/thumbnail.jpg" });
+  // 默认填充登录接口
+  fillSingleTemplate("login");
 }
 
 async function saveConfig() {
   const payload = {
     base_url: document.getElementById("cfgBaseUrl").value.trim(),
-    login_path: document.getElementById("cfgLoginPath").value.trim(),
-    viewer_path_template: document.getElementById("cfgViewerPath").value.trim(),
     study_uid: document.getElementById("cfgStudyUid").value.trim(),
     series_uid: document.getElementById("cfgSeriesUid").value.trim(),
     password: document.getElementById("cfgPassword").value,
@@ -538,13 +2142,18 @@ async function saveConfig() {
 }
 
 async function startTest(mode) {
-  const users = parseInt(document.getElementById("users").value) || 100;
-  const observe = parseFloat(document.getElementById("observe").value) || 15;
+  const users = parseInt(document.getElementById("users").value) || 20;
+  const observe = parseFloat(document.getElementById("observe").value) || 120;
   // 先保存当前表单配置，再启动
   await saveConfig();
+  const payload = { users, observe, mode };
+  // 如果录制导入了自定义接口，一并传给后端
+  if (window.customApis && window.customApis.length) {
+    payload.apis = window.customApis;
+  }
   const res = await fetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ users, observe, mode })
+    body: JSON.stringify(payload)
   });
   const data = await res.json();
   if (!data.ok) alert(data.msg);
@@ -570,6 +2179,8 @@ async function clearLog() {
 
 connect();
 loadConfig();
+// 初始化各模块历史记录
+["single", "multi", "concurrency", "auto"].forEach(loadHistory);
 </script>
 </body>
 </html>
