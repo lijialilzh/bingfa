@@ -6,3 +6,6 @@ server.log
 __pycache__/
 *.pyc
 .venv/
+
+# 运行时数据（测试历史记录）
+saved_tests.json
