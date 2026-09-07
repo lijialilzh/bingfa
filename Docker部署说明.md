@@ -1,4 +1,4 @@
-# 阅片并发测试 - Docker 部署说明
+# 测试平台 - Docker 部署说明
 
 ## 一、需要上传到服务器的文件
 
@@ -8,7 +8,9 @@ engine.py
 server.py
 index.html
 config.json
-requirements.txt
+record.py
+ui_test.py
+requirements-docker.txt
 ```
 
 ## 二、服务器要求
@@ -23,8 +25,8 @@ requirements.txt
 
 ```bash
 mkdir -p ~/peizhi
-# 在本机执行（把 6 个文件传到服务器）
-scp Dockerfile engine.py server.py index.html config.json requirements.txt 用户名@服务器IP:~/peizhi/
+# 在本机执行（把文件传到服务器）
+scp Dockerfile engine.py server.py index.html config.json record.py ui_test.py requirements-docker.txt 用户名@服务器IP:~/peizhi/
 ```
 
 ### 2. 构建镜像
@@ -39,12 +41,14 @@ docker build -t peizhi-test .
 ### 3. 启动容器
 
 ```bash
-docker run -d --name peizhi-test -p 9000:9000 --restart=always peizhi-test
+docker run -d --name peizhi-test -p 19000:19000 --restart=always peizhi-test
 ```
 
 ### 4. 访问面板
 
-浏览器打开：`http://服务器IP:9000/`
+浏览器打开：`http://服务器IP:19000/`
+
+登录账号：`master`，密码：`Tuixiang2026`
 
 ## 四、常用命令
 
@@ -62,7 +66,7 @@ docker stop peizhi-test
 docker rm peizhi-test
 
 # 重新构建（改了代码后）
-docker build -t peizhi-test . && docker rm -f peizhi-test && docker run -d --name peizhi-test -p 9000:9000 --restart=always peizhi-test
+docker build -t peizhi-test . && docker rm -f peizhi-test && docker run -d --name peizhi-test -p 19000:19000 --restart=always peizhi-test
 ```
 
 ## 五、注意事项
