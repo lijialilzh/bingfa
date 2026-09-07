@@ -342,11 +342,12 @@ class UITestRunner:
 
     async def run_case(self, browser, case: dict, base_url: str = "",
                        headless: bool = True, accounts: dict = None,
-                       login_url: str = "") -> dict:
+                       login_url: str = "", step_interval: float = 0.5) -> dict:
         """执行单条用例，返回结果 dict。
 
         accounts: {"角色名": {"account": ..., "password": ...}}
         login_url: 登录页地址（自动登录时打开）
+        step_interval: 每步之间的间隔秒数（有头模式下便于观察）
         """
         case_id = case.get("id", "")
         name = case.get("name", "")
@@ -454,6 +455,9 @@ class UITestRunner:
                     result["实际"] = log["说明"]
                     break
                 result["步骤日志"].append(log)
+                # 步骤间隔（有头模式下便于观察）
+                if step_interval > 0:
+                    await asyncio.sleep(step_interval)
 
             # 所有步骤执行完后，验证预期结果
             if result["步骤日志"] and result["步骤日志"][-1]["结果"] != "❌":
@@ -477,11 +481,18 @@ class UITestRunner:
 
     async def run(self, cases: list, base_url: str = "",
                   headless: bool = True, accounts: dict = None,
-                  login_url: str = "") -> list:
+                  login_url: str = "", step_interval: float = 0.5) -> list:
         """顺序执行所有用例，返回结果列表。"""
         results = []
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=headless)
+            try:
+                browser = await p.chromium.launch(headless=headless)
+            except Exception as e:
+                # 无图形界面时自动回退到无头模式
+                self._emit({"type": "ui_test_warning",
+                            "msg": f"有头模式启动失败，已自动切换为无头模式：{type(e).__name__}",
+                            "ts": time.time()})
+                browser = await p.chromium.launch(headless=True)
             for i, case in enumerate(cases):
                 if self._stop:
                     break
@@ -489,7 +500,7 @@ class UITestRunner:
                             "total": len(cases), "name": case.get("name", ""),
                             "ts": time.time()})
                 r = await self.run_case(browser, case, base_url, headless,
-                                        accounts, login_url)
+                                        accounts, login_url, step_interval)
                 results.append(r)
                 self._emit({"type": "ui_case_result", "index": i,
                             "total": len(cases), "result": r, "ts": time.time()})

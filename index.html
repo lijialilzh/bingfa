@@ -414,6 +414,12 @@
       <div class="sub-page active" id="single-test">
       <div class="api-test-form">
         <div class="row">
+          <div class="field" style="flex:1">
+            <label>测试名称</label>
+            <input id="singleName" style="width:100%" placeholder="输入此次测试的名称（可选）">
+          </div>
+        </div>
+        <div class="row">
           <div class="field">
             <label>方法</label>
             <select id="singleMethod" style="width:120px">
@@ -496,6 +502,12 @@
       <div class="sub-page active" id="multi-test">
       <div class="api-test-form">
         <div class="row">
+          <div class="field" style="flex:1">
+            <label>测试名称</label>
+            <input id="multiName" style="width:100%" placeholder="输入此次测试的名称（可选）">
+          </div>
+        </div>
+        <div class="row">
           <div class="field">
             <label>产品地址 (base_url)</label>
             <input id="multiBaseUrl" placeholder="http://192.168.108.109:8000">
@@ -557,7 +569,6 @@
     <!-- ============ 并发测试 ============ -->
     <div class="tab-page" id="tab-concurrency">
       <h1>并发测试</h1>
-      <div class="sub">模拟多个用户同时访问接口，每个用户依次调用：登录 → 会话校验 → 消息令牌 → 图像元数据 → 序列数据 → 缩略图 → 图像帧</div>
       <div class="sub-tabs">
         <div class="sub-tab active" data-sub="test" onclick="switchSubTab('concurrency', 'test')">测试</div>
         <div class="sub-tab" data-sub="history" onclick="switchSubTab('concurrency', 'history')">历史记录</div>
@@ -566,6 +577,12 @@
 
   <div class="panel config-panel">
     <h2>接口与账号配置</h2>
+    <div class="row">
+      <div class="field" style="flex:1">
+        <label>测试名称</label>
+        <input id="cfgName" style="width:100%" placeholder="输入此次测试的名称（可选）">
+      </div>
+    </div>
     <div class="row">
       <div class="field">
         <label>产品地址 (base_url)</label>
@@ -669,12 +686,12 @@
     <!-- ============ 录制 ============ -->
     <div class="tab-page" id="tab-record">
       <h1>录制</h1>
-      <div class="sub">打开真实浏览器手动操作，自动捕获所有 HTTP 请求，停止后可导入到多接口测试</div>
+      <div class="sub">方式一：服务器直接录制（浏览器在服务器上弹出）；方式二：Chrome 扩展录制（浏览器在你电脑上弹出）</div>
       <div class="api-test-form">
         <div class="row">
           <div class="field" style="flex:1">
             <label>起始 URL（从哪个页面开始录制）</label>
-            <input id="recordUrl" style="width:100%" placeholder="http://192.168.108.109:8000/app/txzq/view/1.3.46.670589...">
+            <input id="recordUrl" style="width:100%" placeholder="http://192.168.108.109:8000/app/center/login">
           </div>
         </div>
         <div class="row">
@@ -694,11 +711,38 @@
           </div>
         </div>
         <div class="row">
-          <button id="btnRecordStart" onclick="startRecord()">开始录制</button>
+          <button id="btnRecordStart" onclick="startRecord()">开始录制（服务器）</button>
           <button id="btnRecordStop" class="stop" onclick="stopRecord()" disabled>停止录制</button>
           <button class="btn2" onclick="importRecorded()">导入到多接口测试</button>
           <button class="btn2" onclick="importRecordedToConcurrency()">导入到并发测试</button>
           <span id="recordStatus" style="font-size:13px;color:var(--muted)">空闲</span>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>方式二：Chrome 扩展录制（Windows 电脑远程访问时用）</label>
+            <div class="hint" style="line-height:1.8">
+              1. 下载 <code>chrome-extension</code> 文件夹到你的 Windows 电脑<br>
+              2. Chrome 打开 <code>chrome://extensions</code>，开启「开发者模式」<br>
+              3. 点「加载已解压的扩展程序」，选择 <code>chrome-extension</code> 文件夹<br>
+              4. 打开被测系统页面，点扩展图标，填服务器地址 <code id="recordServerHint"></code>，点「开始录制」<br>
+              5. 操作完成后点「停止录制」→「上传到测试平台」，回到本页点「刷新已上传的请求」
+            </div>
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>方式三：Chrome 开发者工具导出 HAR 文件（最简单，零安装）</label>
+            <div class="hint" style="line-height:1.8">
+              1. 在 Chrome 里打开被测系统页面，按 <code>F12</code> 打开开发者工具<br>
+              2. 切到「Network（网络）」标签，勾选「Preserve log（保留日志）」<br>
+              3. 正常操作页面，完成后在请求列表上右键 →「Save all as HAR with content（另存为 HAR）」<br>
+              4. 把导出的 <code>.har</code> 文件上传到下方
+            </div>
+            <input type="file" id="recordHar" accept=".har" onchange="uploadHar()" style="margin-top:8px">
+          </div>
+        </div>
+        <div class="row">
+          <button class="btn2" onclick="loadRecordedRequests()">刷新已上传的请求</button>
         </div>
       </div>
       <div class="panel">
@@ -730,9 +774,13 @@
           </div>
           <div class="field">
             <label style="display:flex;align-items:center;gap:6px">
-              <input type="checkbox" id="autoHeadless" checked style="width:auto">
-              无头模式（后台执行）
+              <input type="checkbox" id="autoHeadless" style="width:auto">
+              无头模式（后台执行，不显示浏览器）
             </label>
+          </div>
+          <div class="field">
+            <label>步骤间隔(秒)</label>
+            <input id="autoStepInterval" type="number" value="0.5" min="0" max="10" step="0.1" style="width:100px">
           </div>
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
@@ -866,6 +914,10 @@ function initAfterLogin() {
   connect();
   loadConfig();
   ["single", "multi", "concurrency", "auto"].forEach(loadHistory);
+  // 显示服务器地址提示
+  const hint = document.getElementById("recordServerHint");
+  if (hint) hint.textContent = location.origin;
+  loadRecordedRequests();
 }
 
 // 页面加载时：有 token 则尝试直接进入，否则显示登录框
@@ -927,6 +979,7 @@ function switchSubTab(module, sub) {
 // 收集单接口测试表单
 function collectSingle() {
   return {
+    name: document.getElementById("singleName").value.trim(),
     method: document.getElementById("singleMethod").value,
     url: document.getElementById("singleUrl").value.trim(),
     content_type: document.getElementById("singleContentType").value,
@@ -938,6 +991,7 @@ function collectSingle() {
 // 应用单接口测试表单
 function applySingle(d) {
   if (!d) return;
+  document.getElementById("singleName").value = d.name || "";
   document.getElementById("singleMethod").value = d.method || "GET";
   document.getElementById("singleUrl").value = d.url || "";
   document.getElementById("singleContentType").value = d.content_type || "application/json";
@@ -949,6 +1003,7 @@ function applySingle(d) {
 // 收集多接口测试表单
 function collectMulti() {
   return {
+    name: document.getElementById("multiName").value.trim(),
     base_url: document.getElementById("multiBaseUrl").value.trim(),
     study_uid: document.getElementById("multiStudyUid").value.trim(),
     series_uid: document.getElementById("multiSeriesUid").value.trim(),
@@ -962,6 +1017,7 @@ function collectMulti() {
 // 应用多接口测试表单
 function applyMulti(d) {
   if (!d) return;
+  document.getElementById("multiName").value = d.name || "";
   document.getElementById("multiBaseUrl").value = d.base_url || "";
   document.getElementById("multiStudyUid").value = d.study_uid || "";
   document.getElementById("multiSeriesUid").value = d.series_uid || "";
@@ -981,6 +1037,7 @@ function applyMulti(d) {
 // 收集并发测试表单
 function collectConcurrency() {
   return {
+    name: document.getElementById("cfgName").value.trim(),
     base_url: document.getElementById("cfgBaseUrl").value.trim(),
     study_uid: document.getElementById("cfgStudyUid").value.trim(),
     series_uid: document.getElementById("cfgSeriesUid").value.trim(),
@@ -995,6 +1052,7 @@ function collectConcurrency() {
 // 应用并发测试表单
 function applyConcurrency(d) {
   if (!d) return;
+  document.getElementById("cfgName").value = d.name || "";
   document.getElementById("cfgBaseUrl").value = d.base_url || "";
   document.getElementById("cfgStudyUid").value = d.study_uid || "";
   document.getElementById("cfgSeriesUid").value = d.series_uid || "";
@@ -1014,6 +1072,7 @@ function collectAuto() {
     base_url: document.getElementById("autoBaseUrl").value.trim(),
     login_url: document.getElementById("autoLoginUrl").value.trim(),
     headless: document.getElementById("autoHeadless").checked,
+    step_interval: document.getElementById("autoStepInterval").value,
     accounts: collectAccounts(),
   };
 }
@@ -1023,7 +1082,8 @@ function applyAuto(d) {
   if (!d) return;
   document.getElementById("autoBaseUrl").value = d.base_url || "";
   document.getElementById("autoLoginUrl").value = d.login_url || "";
-  document.getElementById("autoHeadless").checked = d.headless !== false;
+  document.getElementById("autoHeadless").checked = d.headless === true;
+  document.getElementById("autoStepInterval").value = d.step_interval || 0.5;
   // 回填账号列表
   const list = document.getElementById("autoAccounts");
   list.innerHTML = "";
@@ -1079,8 +1139,12 @@ async function saveModule(module) {
   const collect = MODULE_COLLECTORS[module];
   if (!collect) return;
   const data = collect();
-  const name = await askName();
-  if (name === null) return; // 用户取消
+  // 若已填写「测试名称」，直接用；否则弹窗询问
+  let name = data.name || "";
+  if (!name) {
+    name = await askName();
+    if (name === null) return; // 用户取消
+  }
   try {
     const res = await apiFetch("/api/saved-tests", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -1215,20 +1279,21 @@ function renderHistory(module, records) {
 // 生成记录摘要
 function summarizeRecord(module, d) {
   if (!d) return "";
+  const name = d.name ? `${d.name} · ` : "";
   if (module === "single") {
-    return `${d.method || "GET"} ${d.url || ""}`;
+    return `${name}${d.method || "GET"} ${d.url || ""}`;
   }
   if (module === "multi") {
     const n = (d.apis || []).length;
-    return `${d.base_url || ""} · ${n} 个接口`;
+    return `${name}${d.base_url || ""} · ${n} 个接口`;
   }
   if (module === "concurrency") {
     const accounts = (d.accounts_text || "").split("\n").filter(s => s.trim()).length;
-    return `${d.base_url || ""} · ${d.users || 0} 用户 · ${accounts} 账号`;
+    return `${name}${d.base_url || ""} · ${d.users || 0} 用户 · ${accounts} 账号`;
   }
   if (module === "auto") {
     const steps = (d.steps_text || "").split("\n").filter(s => s.trim()).length;
-    return `${d.base_url || ""} · ${steps} 个步骤`;
+    return `${name}${d.base_url || ""} · ${steps} 个步骤`;
   }
   return "";
 }
@@ -1373,6 +1438,7 @@ async function runAutoTest() {
     base_url: document.getElementById("autoBaseUrl").value.trim(),
     login_url: document.getElementById("autoLoginUrl").value.trim(),
     headless: document.getElementById("autoHeadless").checked,
+    step_interval: parseFloat(document.getElementById("autoStepInterval").value) || 0.5,
     accounts: collectAccounts().reduce((m, a) => {
       m[a.role] = { account: a.account, password: a.password };
       return m;
@@ -1478,9 +1544,10 @@ function addRecordLog(cls, text) {
   log.scrollTop = log.scrollHeight;
 }
 
+// 服务器端录制：启动
 async function startRecord() {
   const url = document.getElementById("recordUrl").value.trim();
-  if (!url) { alert("请输入起始 URL"); return; }
+  if (!url) { showToast("请输入起始 URL", true); return; }
   const loginFirst = document.getElementById("recordLoginFirst").checked;
   const account = document.getElementById("recordAccount").value.trim();
   const password = document.getElementById("recordPassword").value;
@@ -1489,18 +1556,19 @@ async function startRecord() {
     body: JSON.stringify({ url, login_first: loginFirst, account, password })
   });
   const data = await res.json();
-  if (!data.ok) { alert(data.msg); return; }
+  if (!data.ok) { showToast(data.msg, true); return; }
   document.getElementById("recordLog").innerHTML = "";
-  addRecordLog("info", `录制已启动，请在浏览器中操作（起始页：${url}${loginFirst ? "，已先登录" : ""}）`);
+  addRecordLog("info", `录制已启动，请在服务器浏览器中操作（起始页：${url}${loginFirst ? "，已先登录" : ""}）`);
   document.getElementById("btnRecordStart").disabled = true;
   document.getElementById("btnRecordStop").disabled = false;
   document.getElementById("recordStatus").textContent = "录制中…";
 }
 
+// 服务器端录制：停止
 async function stopRecord() {
   const res = await apiFetch("/api/record/stop", { method: "POST" });
   const data = await res.json();
-  if (!data.ok) { alert(data.msg); return; }
+  if (!data.ok) { showToast(data.msg, true); return; }
   recordedRequests = data.requests || [];
   document.getElementById("btnRecordStart").disabled = false;
   document.getElementById("btnRecordStop").disabled = true;
@@ -1508,6 +1576,54 @@ async function stopRecord() {
   addRecordLog("info", `录制结束，共捕获 ${data.count} 个请求`);
   for (const r of recordedRequests) {
     addRecordLog("req", `${r.method} ${r.url}`);
+  }
+}
+
+// 从服务器拉取最近一次导入的请求
+async function loadRecordedRequests() {
+  try {
+    const res2 = await apiFetch("/api/record/imported");
+    const d2 = await res2.json();
+    if (d2.ok && d2.requests && d2.requests.length) {
+      recordedRequests = d2.requests;
+      document.getElementById("recordLog").innerHTML = "";
+      addRecordLog("info", `已加载 ${d2.requests.length} 个请求`);
+      for (const r of recordedRequests) {
+        addRecordLog("req", `${r.method} ${r.url}`);
+      }
+      document.getElementById("recordStatus").textContent = `已加载 ${d2.requests.length} 个请求`;
+    } else {
+      document.getElementById("recordStatus").textContent = "暂无已上传的请求";
+    }
+  } catch (e) {}
+}
+
+// 上传 HAR 文件
+async function uploadHar() {
+  const fileInput = document.getElementById("recordHar");
+  const file = fileInput.files[0];
+  if (!file) return;
+  const statusEl = document.getElementById("recordStatus");
+  statusEl.textContent = "解析 HAR 中…";
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await apiFetch("/api/record/import-har", {
+      method: "POST", body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.msg, true); statusEl.textContent = ""; return; }
+    recordedRequests = data.requests || [];
+    document.getElementById("recordLog").innerHTML = "";
+    addRecordLog("info", `HAR 导入成功，共 ${data.count} 个请求`);
+    for (const r of recordedRequests) {
+      addRecordLog("req", `${r.method} ${r.url}`);
+    }
+    statusEl.textContent = `已导入 ${data.count} 个请求`;
+    showToast(`已导入 ${data.count} 个请求`);
+  } catch (e) {
+    statusEl.textContent = "导入失败";
+    showToast("导入失败：" + e, true);
   }
 }
 
@@ -1998,10 +2114,22 @@ function handleEvent(ev) {
     loadEvidence();
     loadAggregate();
   }
+  else if (ev.type === "record_request") {
+    // 录制：本地脚本上传的请求实时显示
+    if (!recordedRequests) recordedRequests = [];
+    recordedRequests.push({ method: ev.method, url: ev.url });
+    addRecordLog("req", `${ev.method} ${ev.url}`);
+    const statusEl = document.getElementById("recordStatus");
+    if (statusEl) statusEl.textContent = `已捕获 ${recordedRequests.length} 个请求`;
+  }
   else if (ev.type === "ui_case_start") {
     // UI 测试：某条用例开始执行
     const statusEl = document.getElementById("autoStatus");
     if (statusEl) statusEl.textContent = `执行中…（${ev.index + 1}/${ev.total}）${ev.name || ""}`;
+  }
+  else if (ev.type === "ui_test_warning") {
+    // UI 测试：警告（如有头模式启动失败自动回退）
+    showToast(ev.msg || "警告", true);
   }
   else if (ev.type === "ui_case_result") {
     // UI 测试：某条用例执行完成，实时追加结果
@@ -2031,46 +2159,52 @@ async function loadAggregate() {
   const el = document.getElementById("aggregate");
   let html = "";
 
-  // 总耗时
+  // 测试名称 + 总耗时
   html += `<div style="margin-bottom:12px">
-    <span>总耗时：<b style="color:var(--cyan)">${data["总耗时(秒)"] ?? 0} 秒</b></span>
+    ${data.name ? `<span>测试名称：<b style="color:var(--cyan)">${escapeHtml(data.name)}</b></span>` : ""}
+    <span style="margin-left:16px">总耗时：<b style="color:var(--cyan)">${data["总耗时(秒)"] ?? 0} 秒</b></span>
     <span style="margin-left:16px">用户数：<b>${data.users ?? 0}</b></span>
   </div>`;
 
-  // 接口汇总表（横向：接口为列，指标为行）
+  // 接口汇总表（字段与单接口测试一致：接口为行，指标为列）
   const apis = data.接口汇总 || [];
   if (apis.length) {
-    const metrics = [
-      ["样本数", "样本数"],
-      ["平均值(ms)", "平均值"],
-      ["中位数(ms)", "中位数"],
-      ["最小值(ms)", "最小值"],
-      ["最大值(ms)", "最大值"],
-      ["90%线(ms)", "90%线"],
-      ["95%线(ms)", "95%线"],
-      ["99%线(ms)", "99%线"],
-      ["错误率", "错误率"],
-      ["吞吐量(个/s)", "吞吐量(个/s)"],
-    ];
     html += `<div style="overflow-x:auto">
-      <table class="summary-table" style="margin-bottom:16px;min-width:800px">
-      <thead><tr><th>指标</th>`;
+      <table class="summary-table" style="min-width:1200px">
+      <thead><tr>
+        <th style="white-space:nowrap">接口</th>
+        <th style="white-space:nowrap;min-width:260px">URL</th>
+        <th style="white-space:nowrap">主机</th>
+        <th style="white-space:nowrap">端口</th>
+        <th style="white-space:nowrap">方法</th>
+        <th style="white-space:nowrap;min-width:200px">路径</th>
+        <th style="white-space:nowrap">状态码</th>
+        <th style="white-space:nowrap">结果</th>
+        <th style="white-space:nowrap">循环次数</th>
+        <th style="white-space:nowrap">平均耗时</th>
+        <th style="white-space:nowrap">最小耗时</th>
+        <th style="white-space:nowrap">最大耗时</th>
+        <th style="white-space:nowrap">大小</th>
+      </tr></thead>
+      <tbody>`;
     for (const a of apis) {
-      html += `<th>${a.接口}</th>`;
-    }
-    html += `</tr></thead><tbody>`;
-    for (const [label, key] of metrics) {
-      html += `<tr><td>${label}</td>`;
-      for (const a of apis) {
-        let val = a[key] ?? 0;
-        let style = "";
-        if (key === "错误率") {
-          style = `style="color:${val > 0 ? "var(--red)" : "var(--green)"}"`;
-          val = val + "%";
-        }
-        html += `<td class="num" ${style}>${val}</td>`;
-      }
-      html += `</tr>`;
+      const ok = a.结果 === "✅ 通过";
+      const statusColor = ok ? "var(--green)" : "var(--red)";
+      html += `<tr>
+        <td style="white-space:nowrap">${escapeHtml(a.接口 || "")}</td>
+        <td style="word-break:break-all">${escapeHtml(a.URL || "")}</td>
+        <td style="white-space:nowrap">${escapeHtml(a.主机 || "")}</td>
+        <td class="num">${a.端口 ?? ""}</td>
+        <td style="color:var(--cyan);white-space:nowrap">${escapeHtml(a.方法 || "")}</td>
+        <td style="word-break:break-all">${escapeHtml(a.路径 || "")}</td>
+        <td class="num" style="color:${statusColor};white-space:nowrap">${a.状态码 ?? ""}</td>
+        <td style="color:${statusColor};white-space:nowrap">${a.结果}</td>
+        <td class="num">${a.循环次数 ?? 0}</td>
+        <td class="num">${a.平均耗时 ?? 0} ms</td>
+        <td class="num">${a.最小耗时 ?? 0} ms</td>
+        <td class="num">${a.最大耗时 ?? 0} ms</td>
+        <td class="num">${a.大小 ?? 0} 字节</td>
+      </tr>`;
     }
     html += `</tbody></table></div>`;
   }
@@ -2339,7 +2473,10 @@ async function startTest(mode) {
   const observe = parseFloat(document.getElementById("observe").value) || 300;
   // 先保存当前表单配置，再启动
   await saveConfig();
-  const payload = { users, observe, mode };
+  const payload = {
+    users, observe, mode,
+    name: document.getElementById("cfgName").value.trim(),
+  };
   // 如果录制导入了自定义接口，一并传给后端
   if (window.customApis && window.customApis.length) {
     payload.apis = window.customApis;

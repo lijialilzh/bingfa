@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<style>
+  body { width: 320px; padding: 16px; font-family: -apple-system, "Microsoft YaHei", sans-serif; }
+  h2 { font-size: 15px; margin: 0 0 12px; }
+  label { font-size: 12px; color: #666; display: block; margin-bottom: 4px; }
+  input { width: 100%; padding: 6px 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; margin-bottom: 12px; box-sizing: border-box; }
+  button { width: 100%; padding: 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  #btnStart { background: #3b82f6; color: #fff; }
+  #btnStop { background: #ef4444; color: #fff; display: none; }
+  #btnUpload { background: #22c55e; color: #fff; display: none; }
+  #status { font-size: 12px; color: #666; margin-top: 8px; min-height: 16px; }
+  .hint { font-size: 11px; color: #999; margin-top: 8px; line-height: 1.5; }
+</style>
+</head>
+<body>
+  <h2>测试平台录制助手</h2>
+  <label>测试平台服务器地址</label>
+  <input id="serverUrl" placeholder="http://服务器IP:19000">
+  <button id="btnStart">开始录制</button>
+  <button id="btnStop">停止录制</button>
+  <button id="btnUpload">上传到测试平台</button>
+  <div id="status">未开始</div>
+  <div class="hint">
+    1. 填写服务器地址<br>
+    2. 点「开始录制」<br>
+    3. 在页面上正常操作<br>
+    4. 点「停止录制」再点「上传」
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

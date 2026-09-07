@@ -255,7 +255,8 @@ class TestEngine:
                         resp = await client.get(url)
                     elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                     await self._emit_resp(user_id, account, resp.status_code,
-                                          url, name, elapsed)
+                                          url, name, elapsed,
+                                          size=len(resp.content))
                 except Exception as e:
                     elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                     await self._emit_resp(user_id, account, 0, url, name,
@@ -353,7 +354,8 @@ class TestEngine:
                             st.first_frame_ts = time.time()
                             st.first_frame_ms = (t_req - t0) * 1000
                     await self._emit_resp(user_id, st.account, resp.status_code,
-                                          url, "图像帧", elapsed)
+                                          url, "图像帧", elapsed,
+                                          size=len(resp.content))
                 except Exception as e:
                     elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                     await self._emit_resp(user_id, st.account, 0, url, "图像帧",
@@ -377,10 +379,10 @@ class TestEngine:
 
     async def _emit_resp(self, user_id: int, account: str, status: int,
                          url: str, tag: str, elapsed_ms: float,
-                         error: str = "") -> None:
+                         error: str = "", size: int = 0) -> None:
         ev = {"type": "response", "user_id": user_id, "account": account,
               "status": status, "url": url, "tag": tag,
-              "elapsed_ms": elapsed_ms, "ts": time.time()}
+              "elapsed_ms": elapsed_ms, "size": size, "ts": time.time()}
         if error:
             ev["error"] = error
         self.emit(ev)
@@ -418,7 +420,8 @@ class TestEngine:
                     t_login_ok = time.perf_counter()
                     st.viewer_ts = time.time()
                     await self._emit_resp(user_id, account, resp.status_code,
-                                          login_url, "登录", elapsed)
+                                          login_url, "登录", elapsed,
+                                          size=len(resp.content))
                     self.emit({"type": "login_ok", "user_id": user_id,
                                "account": account, "login_ms": elapsed,
                                "session_token": st.session_token,
@@ -429,7 +432,8 @@ class TestEngine:
                                "ts": time.time()})
                 else:
                     await self._emit_resp(user_id, account, resp.status_code,
-                                          login_url, "登录", elapsed)
+                                          login_url, "登录", elapsed,
+                                          size=len(resp.content))
                     st.status = "error"
                     st.error = "登录失败"
                     self.emit({"type": "user_status", "user_id": user_id,
@@ -455,7 +459,8 @@ class TestEngine:
                 resp = await client.get(check_url)
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, resp.status_code,
-                                      check_url, "会话校验", elapsed)
+                                      check_url, "会话校验", elapsed,
+                                      size=len(resp.content))
             except Exception as e:
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, 0, check_url, "会话校验",
@@ -469,7 +474,8 @@ class TestEngine:
                 resp = await client.get(msg_token_url)
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, resp.status_code,
-                                      msg_token_url, "消息令牌", elapsed)
+                                      msg_token_url, "消息令牌", elapsed,
+                                      size=len(resp.content))
             except Exception as e:
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, 0, msg_token_url,
@@ -497,7 +503,8 @@ class TestEngine:
                 except Exception:
                     pass
                 await self._emit_resp(user_id, account, resp.status_code,
-                                      studies_url, "图像元数据", elapsed)
+                                      studies_url, "图像元数据", elapsed,
+                                      size=len(resp.content))
             except Exception as e:
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, 0, studies_url,
@@ -519,7 +526,8 @@ class TestEngine:
                 except Exception:
                     pass
                 await self._emit_resp(user_id, account, resp.status_code,
-                                      dcp_url, "序列数据", elapsed)
+                                      dcp_url, "序列数据", elapsed,
+                                      size=len(resp.content))
             except Exception as e:
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, 0, dcp_url, "序列数据",
@@ -533,7 +541,8 @@ class TestEngine:
                 resp = await client.get(thumb_url)
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, resp.status_code,
-                                      thumb_url, "缩略图", elapsed)
+                                      thumb_url, "缩略图", elapsed,
+                                      size=len(resp.content))
             except Exception as e:
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                 await self._emit_resp(user_id, account, 0, thumb_url, "缩略图",
@@ -571,7 +580,8 @@ class TestEngine:
                             st.first_frame_ts = time.time()
                             st.first_frame_ms = (t_req - t0) * 1000
                     await self._emit_resp(user_id, account, resp.status_code,
-                                          url, "图像帧", elapsed)
+                                          url, "图像帧", elapsed,
+                                          size=len(resp.content))
                 except Exception as e:
                     elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                     await self._emit_resp(user_id, account, 0, url, "图像帧",

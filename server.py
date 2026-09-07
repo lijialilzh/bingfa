@@ -10,6 +10,7 @@ import asyncio
 import hashlib
 import io
 import json
+import re
 import secrets
 import threading
 import time
@@ -42,6 +43,7 @@ engine_task: Optional[asyncio.Task] = None
 clients: Set[WebSocket] = set()
 event_log: List[dict] = []          # 保留最近事件用于回放
 MAX_LOG = 5000
+current_test_name: str = ""         # 当前并发测试的名称
 
 # 录制状态
 recorder: Optional[Recorder] = None
@@ -749,13 +751,14 @@ async def delete_saved_test(module: str, record_id: str) -> dict:
 
 @app.post("/api/start")
 async def start_test(payload: dict) -> dict:
-    global engine, engine_task
+    global engine, engine_task, current_test_name
     if engine_task and not engine_task.done():
         return {"ok": False, "msg": "测试已在运行中"}
 
     users = int(payload.get("users", 20))
     observe = float(payload.get("observe", 300))
     mode = payload.get("mode", "full")
+    current_test_name = (payload.get("name") or "").strip()
     event_log.clear()
 
     # 优先用请求里带的配置，否则用已保存配置
@@ -847,6 +850,71 @@ async def record_status() -> dict:
     return {"running": running, "count": len(recorded_requests)}
 
 
+@app.post("/api/record/import")
+async def record_import(payload: dict) -> dict:
+    """接收本地录制脚本上传的请求列表。"""
+    global recorded_requests
+    requests = payload.get("requests") or []
+    if not requests:
+        return {"ok": False, "msg": "没有请求数据"}
+    recorded_requests = requests
+    # 广播给前端，让录制页面实时显示
+    for r in requests:
+        broadcast({"type": "record_request", "method": r.get("method", ""),
+                   "url": r.get("url", ""), "ts": time.time()})
+    return {"ok": True, "count": len(requests), "requests": requests}
+
+
+@app.get("/api/record/imported")
+async def record_imported() -> dict:
+    """返回最近一次导入的请求列表。"""
+    return {"ok": True, "requests": recorded_requests}
+
+
+@app.post("/api/record/import-har")
+async def record_import_har(file: UploadFile = File(...)) -> dict:
+    """接收 Chrome 开发者工具导出的 HAR 文件，解析出请求列表。"""
+    global recorded_requests
+    content = await file.read()
+    try:
+        har = json.loads(content.decode("utf-8"))
+    except Exception as e:
+        return {"ok": False, "msg": f"无法解析 HAR 文件: {type(e).__name__}: {e}"}
+
+    entries = har.get("log", {}).get("entries", [])
+    requests = []
+    for e in entries:
+        req = e.get("request", {})
+        url = req.get("url", "")
+        # 跳过静态资源
+        if re.search(r'\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?|$)', url, re.I):
+            continue
+        method = req.get("method", "GET")
+        headers = {}
+        for h in req.get("headers", []):
+            headers[h.get("name", "")] = h.get("value", "")
+        body = ""
+        post_data = req.get("postData", {})
+        if post_data:
+            body = post_data.get("text", "")
+        requests.append({
+            "method": method,
+            "url": url,
+            "headers": headers,
+            "body": body,
+            "ts": e.get("startedDateTime", ""),
+        })
+
+    if not requests:
+        return {"ok": False, "msg": "HAR 文件中没有可导入的 API 请求"}
+
+    recorded_requests = requests
+    for r in requests:
+        broadcast({"type": "record_request", "method": r.get("method", ""),
+                   "url": r.get("url", ""), "ts": time.time()})
+    return {"ok": True, "count": len(requests), "requests": requests}
+
+
 # ---------------- UI 自动化测试 ----------------
 
 @app.post("/api/ui-test/upload")
@@ -882,12 +950,14 @@ async def ui_test_start(payload: dict) -> dict:
     headless = bool(payload.get("headless", True))
     login_url = (payload.get("login_url") or "").strip()
     accounts = payload.get("accounts") or {}
+    step_interval = float(payload.get("step_interval", 0.5) or 0.5)
     cases = payload.get("cases") or ui_cases
     if not cases:
         return {"ok": False, "msg": "没有用例，请先上传 Excel"}
     ui_runner = UITestRunner(emit=broadcast)
     ui_task = asyncio.create_task(
-        ui_runner.run(cases, base_url, headless, accounts, login_url))
+        ui_runner.run(cases, base_url, headless, accounts, login_url,
+                      step_interval))
     return {"ok": True, "msg": f"已启动 UI 测试，共 {len(cases)} 条用例"}
 
 
@@ -957,83 +1027,80 @@ async def report() -> dict:
 
 @app.get("/api/aggregate")
 async def aggregate() -> dict:
-    """聚合报告（JMeter 风格）：按接口统计 样本数/平均值/中位数/最小值/最大值/
-    90%线/95%线/99%线/错误率/吞吐量。"""
+    """聚合报告：按接口统计，字段与单接口测试一致
+    （URL/主机/端口/方法/路径/状态码/结果/循环次数/平均耗时/最小耗时/最大耗时/大小）。"""
     import statistics
+    from urllib.parse import urlparse
     # 从事件日志中聚合
     reqs = [e for e in event_log if e.get("type") == "request"]
     resps = [e for e in event_log if e.get("type") == "response"]
+
+    # 按 tag 记录 method（从 request 事件里取）
+    tag_method: dict = {}
+    for r in reqs:
+        tag = r.get("tag", "其他")
+        if tag not in tag_method:
+            tag_method[tag] = r.get("method", "GET")
 
     # 按 tag 分组统计响应
     by_tag: dict = {}
     for r in resps:
         tag = r.get("tag", "其他")
         if tag not in by_tag:
-            by_tag[tag] = {"请求数": 0, "成功": 0, "失败": 0, "耗时": []}
-        by_tag[tag]["请求数"] += 1
+            by_tag[tag] = {"耗时": [], "大小": [], "状态码": [], "url": "",
+                           "成功": 0, "失败": 0}
+        info = by_tag[tag]
         status = r.get("status", 0)
         if 0 < status < 400:
-            by_tag[tag]["成功"] += 1
+            info["成功"] += 1
         else:
-            by_tag[tag]["失败"] += 1
+            info["失败"] += 1
+        info["状态码"].append(status)
         elapsed = r.get("elapsed_ms", 0)
         if elapsed > 0:
-            by_tag[tag]["耗时"].append(elapsed)
+            info["耗时"].append(elapsed)
+        size = r.get("size", 0)
+        if size > 0:
+            info["大小"].append(size)
+        if not info["url"]:
+            info["url"] = r.get("url", "")
 
-    # 请求数（按 tag）
-    req_count: dict = {}
-    for r in reqs:
-        tag = r.get("tag", "其他")
-        req_count[tag] = req_count.get(tag, 0) + 1
+    def avg(vals):
+        return round(statistics.mean(vals), 1) if vals else 0
 
-    # 测试总耗时（从第一个请求到最后一个响应）
-    all_ts = [e.get("ts", 0) for e in event_log if e.get("ts")]
-    total_seconds = (max(all_ts) - min(all_ts)) if len(all_ts) > 1 else 0.0
-
-    def jmeter_metrics(vals):
-        """JMeter 聚合报告指标。"""
-        if not vals:
-            return None
-        q = statistics.quantiles(vals, n=100, method="inclusive")
-        return {
-            "样本数": len(vals),
-            "平均值": round(statistics.mean(vals), 1),
-            "中位数": round(q[49], 1),
-            "最小值": round(min(vals), 1),
-            "最大值": round(max(vals), 1),
-            "90%线": round(q[89], 1),
-            "95%线": round(q[94], 1),
-            "99%线": round(q[98], 1),
-        }
-
-    # 接口汇总（JMeter 风格）
+    # 接口汇总（字段与单接口测试一致）
     api_summary = []
     for tag, info in by_tag.items():
-        total = info["请求数"]
-        fail = info["失败"]
-        elapsed = info["耗时"]
-        m = jmeter_metrics(elapsed) or {}
+        parsed = urlparse(info["url"])
+        # 多数状态码
+        status = max(set(info["状态码"]), key=info["状态码"].count) if info["状态码"] else 0
+        ok = 0 < status < 400
         api_summary.append({
             "接口": tag,
-            "样本数": total,
-            "平均值": m.get("平均值", 0),
-            "中位数": m.get("中位数", 0),
-            "最小值": m.get("最小值", 0),
-            "最大值": m.get("最大值", 0),
-            "90%线": m.get("90%线", 0),
-            "95%线": m.get("95%线", 0),
-            "99%线": m.get("99%线", 0),
-            "错误率": round(fail / total * 100, 2) if total else 0,
-            "吞吐量(个/s)": round(total / total_seconds, 2) if total_seconds > 0 else 0,
+            "URL": info["url"],
+            "主机": parsed.hostname or "",
+            "端口": parsed.port or (443 if parsed.scheme == "https" else 80),
+            "方法": tag_method.get(tag, "GET"),
+            "路径": parsed.path or "/",
+            "状态码": status,
+            "结果": "✅ 通过" if ok else "❌ 失败",
+            "循环次数": info["成功"] + info["失败"],
+            "平均耗时": avg(info["耗时"]),
+            "最小耗时": round(min(info["耗时"]), 1) if info["耗时"] else 0,
+            "最大耗时": round(max(info["耗时"]), 1) if info["耗时"] else 0,
+            "大小": avg(info["大小"]),
         })
 
     # 状态统计
     states = engine._snapshot() if engine else []
     return {
         "ok": True,
+        "name": current_test_name,
         "mode": getattr(engine, "mode", "full") if engine else "full",
         "users": len(states),
-        "总耗时(秒)": round(total_seconds, 1),
+        "总耗时(秒)": round(max([e.get("ts", 0) for e in resps if e.get("ts")]) -
+                             min([e.get("ts", 0) for e in reqs if e.get("ts")]), 1)
+                            if reqs and resps else 0.0,
         "接口汇总": api_summary,
         "状态统计": {
             "完成": sum(1 for s in states if s["status"] == "done"),

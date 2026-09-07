@@ -156,6 +156,22 @@
   ],
   "concurrency": [
     {
+      "id": "1788765206867",
+      "name": "诊断测试",
+      "time": "2026-09-07 15:13:26",
+      "data": {
+        "name": "诊断测试",
+        "base_url": "http://192.168.108.109:8000",
+        "study_uid": "1.3.46.670589.28.68172260368172520200518000449629596",
+        "series_uid": "1.3.46.670589.28.681722603681725.20200518010931497060.2.2",
+        "password": "123qwe",
+        "accounts_text": "test\ntest2\ntest3\ntest4\ntest5\ntest6\ntest7\ntest8\ntest9\ntest10\ntest11\ntest12\ntest13\ntest14\ntest15\ntest16\ntest17\ntest18\ntest19\ntest20\ntest21\ntest22\ntest23\ntest24\ntest25\ntest26\ntest27\ntest28\ntest29\ntest30\ntest31\ntest32\ntest33\ntest34\ntest35\ntest36\ntest37\ntest38\ntest39\ntest40\ntest41\ntest42\ntest43\ntest44\ntest45\ntest46\ntest47\ntest48\ntest49\ntest50\ntest51\ntest52\ntest53\ntest54\ntest55\ntest56\ntest57\ntest58\ntest59\ntest60\ntest61\ntest62\ntest63\ntest64\ntest65\ntest66\ntest67\ntest68\ntest69\ntest70\ntest71\ntest72\ntest73\ntest74\ntest75\ntest76\ntest77\ntest78\ntest79\ntest80\ntest81\ntest82\ntest83\ntest84\ntest85\ntest86\ntest87\ntest88\ntest89\ntest90\ntest91\ntest92\ntest93\ntest94\ntest95\ntest96\ntest97\ntest98\ntest99\ntest100",
+        "users": "20",
+        "observe": "300",
+        "custom_apis": null
+      }
+    },
+    {
       "id": "1788753138340",
       "name": "诊断图像图像加载并发测试",
       "time": "2026-09-07 11:52:18",
