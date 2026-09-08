@@ -333,8 +333,11 @@ class TestEngine:
         self.emit({"type": "start", "users": self.users,
                    "accounts": accounts, "mode": "full", "ts": time.time()})
 
-        # 轮间同步屏障：所有用户完成第 N 轮后才开始第 N+1 轮
-        self.round_barriers = [asyncio.Barrier(self.users) for _ in range(self.rounds)]
+        # 轮间同步：所有用户完成第 N 轮后才开始第 N+1 轮
+        # 用计数器+事件，避免 Barrier 因个别用户退出而卡死
+        self.round_events = [asyncio.Event() for _ in range(self.rounds)]
+        self.round_counts = [0] * self.rounds
+        self.round_locks = [asyncio.Lock() for _ in range(self.rounds)]
 
         tasks = [self._run_user(i, cred) for i, cred in enumerate(creds)]
         await asyncio.gather(*tasks)
@@ -411,8 +414,10 @@ class TestEngine:
                    "total_frames": total, "mode": "frame_only",
                    "ts": time.time()})
 
-        # 轮间同步屏障
-        self.round_barriers = [asyncio.Barrier(self.users) for _ in range(self.rounds)]
+        # 轮间同步：所有用户完成第 N 轮后才开始第 N+1 轮
+        self.round_events = [asyncio.Event() for _ in range(self.rounds)]
+        self.round_counts = [0] * self.rounds
+        self.round_locks = [asyncio.Lock() for _ in range(self.rounds)]
 
         tasks = [self._run_user_frame_only(i, frame_urls)
                  for i in range(self.users)]
@@ -454,11 +459,8 @@ class TestEngine:
                            "frames_loaded": st.frames_loaded,
                            "ts": time.time()})
                 # 等待所有用户完成本轮后才开始下一轮
-                if round_idx < self.rounds - 1 and hasattr(self, "round_barriers"):
-                    try:
-                        await asyncio.wait_for(self.round_barriers[round_idx].wait(), timeout=600)
-                    except Exception:
-                        pass
+                if round_idx < self.rounds - 1 and hasattr(self, "round_events"):
+                    await self._wait_round(round_idx)
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
         if self._stop:
@@ -533,6 +535,30 @@ class TestEngine:
         await asyncio.gather(*(fetch_one(u) for u in urls))
         return round((time.perf_counter() - round_t0) * 1000, 1)
 
+    async def _wait_round(self, round_idx: int) -> None:
+        """等待所有用户完成第 round_idx 轮。
+
+        用计数器+事件实现，避免 Barrier 因个别用户提前退出而卡死。
+        若某用户登录失败提前退出，会调用 _abandon_round 补计数。
+        """
+        async with self.round_locks[round_idx]:
+            self.round_counts[round_idx] += 1
+            if self.round_counts[round_idx] >= self.users:
+                self.round_events[round_idx].set()
+        try:
+            await asyncio.wait_for(self.round_events[round_idx].wait(), timeout=600)
+        except Exception:
+            pass
+
+    async def _abandon_round(self, round_idx: int) -> None:
+        """用户提前退出时补计数，避免其他用户卡在屏障。"""
+        if not hasattr(self, "round_events"):
+            return
+        async with self.round_locks[round_idx]:
+            self.round_counts[round_idx] += 1
+            if self.round_counts[round_idx] >= self.users:
+                self.round_events[round_idx].set()
+
     async def _run_user(self, user_id: int, cred: dict) -> None:
         st = self.states[user_id]
         account = cred["account"]
@@ -570,14 +596,14 @@ class TestEngine:
                                "round_ms": round_ms,
                                "frames_loaded": st.frames_loaded,
                                "ts": time.time()})
-                # 等待所有用户完成本轮后才开始下一轮
-                if round_idx < self.rounds - 1 and hasattr(self, "round_barriers"):
-                    try:
-                        await asyncio.wait_for(self.round_barriers[round_idx].wait(), timeout=600)
-                    except Exception:
-                        pass
                 if not ok and not self._stop:
-                    break  # 登录失败等致命错误，不再继续后续轮次
+                    # 登录失败等致命错误：补上当前轮及后续所有轮的计数，避免其他用户卡住
+                    for r in range(round_idx, self.rounds - 1):
+                        await self._abandon_round(r)
+                    break  # 不再继续后续轮次
+                # 等待所有用户完成本轮后才开始下一轮
+                if round_idx < self.rounds - 1 and hasattr(self, "round_events"):
+                    await self._wait_round(round_idx)
 
         # 3 轮总耗时 = 各轮耗时之和（而非 t0 到结束，避免轮间间隔被计入）
         st.all_frames_ms = round(sum(st.round_times), 1) if st.round_times else (time.perf_counter() - t0) * 1000

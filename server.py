@@ -797,6 +797,7 @@ async def set_saved_tests(payload: dict) -> dict:
         "name": name,
         "time": _time.strftime("%Y-%m-%d %H:%M:%S"),
         "data": data,
+        "result": payload.get("result"),  # 测试结果（可选）
     }
     saved = load_saved_tests()
     # 兼容旧格式：旧数据是 dict，转成列表

@@ -255,12 +255,15 @@
   .history-panel { margin-top: 16px; }
   .history-list { display: flex; flex-direction: column; gap: 8px; }
   .history-item {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-direction: column;
     background: #0b1220; border: 1px solid var(--border);
     border-radius: 8px; padding: 8px 12px; font-size: 13px;
-    cursor: pointer; transition: border-color 0.15s, background 0.15s;
+    transition: border-color 0.15s, background 0.15s;
   }
   .history-item:hover { border-color: var(--blue); background: #111c30; }
+  .history-item .h-row {
+    display: flex; align-items: center; gap: 10px; cursor: pointer;
+  }
   .history-item .h-name { font-weight: 600; color: var(--text); }
   .history-item .h-time { color: var(--muted); font-size: 12px; }
   .history-item .h-summary {
@@ -275,6 +278,16 @@
   .history-item .h-btn:hover { background: #475569; }
   .history-item .h-btn.del { background: #3a1515; border-color: var(--red); color: #fca5a5; }
   .history-item .h-btn.del:hover { background: #4a1a1a; }
+  .history-item .h-btn.toggle { background: #1e3a5f; border-color: var(--cyan); color: #7dd3fc; }
+  .history-item .h-result {
+    margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border);
+    font-size: 12px; overflow-x: auto;
+  }
+  .history-item .h-result-stats {
+    display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px;
+    color: var(--muted);
+  }
+  .history-item .h-result-stats b { color: var(--cyan); }
   .history-empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
 
   /* ---- 表单回填高亮动画 ---- */
@@ -1193,10 +1206,12 @@ async function saveModule(module) {
     name = await askName();
     if (name === null) return; // 用户取消
   }
+  // 附带当前测试结果（若有）
+  const result = collectResult(module);
   try {
     const res = await apiFetch("/api/saved-tests", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ module, name, data })
+      body: JSON.stringify({ module, name, data, result })
     });
     const r = await res.json();
     if (r.ok) {
@@ -1208,6 +1223,40 @@ async function saveModule(module) {
   } catch (e) {
     alert("保存失败：" + e);
   }
+}
+
+// 收集当前模块的测试结果（用于随历史记录一起保存）
+function collectResult(module) {
+  if (module === "concurrency") {
+    // 并发测试：保存汇总统计 + 用户明细 + 聚合报告
+    const summaryEl = document.getElementById("summaryContainer");
+    const aggEl = document.getElementById("aggregate");
+    return {
+      summaryHtml: summaryEl ? summaryEl.innerHTML : "",
+      aggregateHtml: aggEl ? aggEl.innerHTML : "",
+      stats: {
+        total: document.getElementById("sTotal")?.textContent || "0",
+        login: document.getElementById("sLogin")?.textContent || "0",
+        done: document.getElementById("sDone")?.textContent || "0",
+        avgLogin: document.getElementById("sAvgLogin")?.textContent || "-",
+        avgViewer: document.getElementById("sAvgViewer")?.textContent || "-",
+        avgAll: document.getElementById("sAvgAll")?.innerHTML || "-",
+      },
+    };
+  }
+  if (module === "multi") {
+    const logEl = document.getElementById("multiLog");
+    return { logHtml: logEl ? logEl.innerHTML : "" };
+  }
+  if (module === "single") {
+    const aggEl = document.getElementById("singleAggregate");
+    return { aggregateHtml: aggEl ? aggEl.innerHTML : "" };
+  }
+  if (module === "auto") {
+    const resEl = document.getElementById("autoResult");
+    return { resultsHtml: resEl ? resEl.innerHTML : "" };
+  }
+  return null;
 }
 
 // 弹出自定义命名输入框，返回名称（取消返回 null）
@@ -1308,20 +1357,84 @@ function renderHistory(module, records) {
     const item = document.createElement("div");
     item.className = "history-item";
     const summary = summarizeRecord(module, rec.data);
+    const hasResult = rec.result && Object.keys(rec.result).length > 0;
     item.innerHTML = `
-      <span class="h-name">${escapeHtml(rec.name || "未命名")}</span>
-      <span class="h-time">${escapeHtml(rec.time || "")}</span>
-      <span class="h-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</span>
-      <button class="h-btn" data-id="${escapeHtml(rec.id)}">加载</button>
-      <button class="h-btn del" data-id="${escapeHtml(rec.id)}">删除</button>`;
-    // 点击条目任意位置（除删除按钮外）都触发加载
-    item.addEventListener("click", (e) => {
-      if (e.target.closest(".h-btn.del")) return;
-      applyHistoryRecord(module, rec.data);
+      <div class="h-row">
+        <span class="h-name">${escapeHtml(rec.name || "未命名")}</span>
+        <span class="h-time">${escapeHtml(rec.time || "")}</span>
+        <span class="h-summary" title="${escapeHtml(summary)}">${escapeHtml(summary)}</span>
+        <button class="h-btn" data-id="${escapeHtml(rec.id)}">加载</button>
+        <button class="h-btn del" data-id="${escapeHtml(rec.id)}">删除</button>
+        ${hasResult ? `<button class="h-btn toggle" data-id="${escapeHtml(rec.id)}">结果 ▾</button>` : ""}
+      </div>
+      ${hasResult ? `<div class="h-result" data-id="${escapeHtml(rec.id)}" style="display:none"></div>` : ""}`;
+    // 点击条目（除按钮外）展开/收起结果
+    item.querySelector(".h-row").addEventListener("click", (e) => {
+      if (e.target.closest(".h-btn")) return;
+      const resultEl = item.querySelector(".h-result");
+      if (resultEl) {
+        const hidden = resultEl.style.display === "none";
+        resultEl.style.display = hidden ? "block" : "none";
+        const btn = item.querySelector(".h-btn.toggle");
+        if (btn) btn.textContent = hidden ? "结果 ▴" : "结果 ▾";
+      }
     });
+    // 结果按钮：展开/收起
+    const toggleBtn = item.querySelector(".h-btn.toggle");
+    if (toggleBtn) {
+      toggleBtn.onclick = () => {
+        const resultEl = item.querySelector(".h-result");
+        if (!resultEl) return;
+        const hidden = resultEl.style.display === "none";
+        resultEl.style.display = hidden ? "block" : "none";
+        toggleBtn.textContent = hidden ? "结果 ▴" : "结果 ▾";
+      };
+    }
+    // 加载按钮：回填表单
+    item.querySelector(".h-btn:not(.del):not(.toggle)").onclick = () => {
+      applyHistoryRecord(module, rec.data);
+    };
+    // 删除按钮
     item.querySelector(".h-btn.del").onclick = () => deleteHistory(module, rec.id);
+    // 填充结果内容
+    const resultEl = item.querySelector(".h-result");
+    if (resultEl) {
+      resultEl.innerHTML = renderResultContent(module, rec.result);
+    }
     el.appendChild(item);
   }
+}
+
+// 渲染保存的测试结果内容
+function renderResultContent(module, result) {
+  if (!result) return "";
+  if (module === "concurrency") {
+    let html = "";
+    if (result.stats) {
+      const s = result.stats;
+      html += `<div class="h-result-stats">
+        <span>总用户：<b>${escapeHtml(s.total)}</b></span>
+        <span>登录成功：<b>${escapeHtml(s.login)}</b></span>
+        <span>完成：<b>${escapeHtml(s.done)}</b></span>
+        <span>平均登录：<b>${escapeHtml(s.avgLogin)}ms</b></span>
+        <span>平均进入阅片：<b>${escapeHtml(s.avgViewer)}ms</b></span>
+        <span>平均总耗时：<b>${escapeHtml(s.avgAll)}ms</b></span>
+      </div>`;
+    }
+    if (result.summaryHtml) html += result.summaryHtml;
+    if (result.aggregateHtml) html += result.aggregateHtml;
+    return html;
+  }
+  if (module === "multi") {
+    return result.logHtml || "";
+  }
+  if (module === "single") {
+    return result.aggregateHtml || "";
+  }
+  if (module === "auto") {
+    return result.resultsHtml || "";
+  }
+  return "";
 }
 
 // 生成记录摘要
