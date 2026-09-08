@@ -554,6 +554,7 @@ class TestEngine:
                            f"?studyInstanceUID={self.study_uid}&taskType=xa_brain&product=XA_BRAIN")
             t_req = time.perf_counter()
             await self._emit_req(user_id, account, "GET", studies_url, "图像元数据")
+            series_uids: list[str] = []
             try:
                 resp = await client.get(studies_url)
                 elapsed = round((time.perf_counter() - t_req) * 1000, 1)
@@ -563,6 +564,9 @@ class TestEngine:
                     for study in data.get("data", []):
                         for series in study.get("series", []):
                             total += int(series.get("imgFrameNumber", 0))
+                            suid = series.get("seriesInstanceUID")
+                            if suid:
+                                series_uids.append(suid)
                     if total > 0:
                         st.total_frames = total
                         self.emit({"type": "total_frames", "user_id": user_id,
@@ -579,8 +583,11 @@ class TestEngine:
                                       "图像元数据", elapsed, f"{type(e).__name__}: {e}")
 
             # ---- 4. 序列数据 ----
+            # 优先用配置的 series_uid（若在序列列表中），否则用解析出的第一个序列
+            series_uid = (self.series_uid if self.series_uid in series_uids
+                          else (series_uids[0] if series_uids else self.series_uid))
             dcp_url = self.base_url + self.dcp_api_path_template.format(
-                series_uid=self.series_uid)
+                series_uid=series_uid)
             t_req = time.perf_counter()
             await self._emit_req(user_id, account, "GET", dcp_url, "序列数据")
             frame_urls = []
@@ -602,7 +609,7 @@ class TestEngine:
                                       elapsed, f"{type(e).__name__}: {e}")
 
             # ---- 5. 缩略图 ----
-            thumb_url = f"{self.base_url}{self.thumbnail_prefix}/{self.series_uid}/thumbnail.jpg"
+            thumb_url = f"{self.base_url}{self.thumbnail_prefix}/{series_uid}/thumbnail.jpg"
             t_req = time.perf_counter()
             await self._emit_req(user_id, account, "GET", thumb_url, "缩略图")
             try:
