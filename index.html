@@ -2425,6 +2425,11 @@ function handleEvent(ev) {
       u.round_first_frame_ms = ev.round_first_frame_ms || u.round_first_frame_ms || [];
       u.round_frame_ms = ev.round_frame_ms || u.round_frame_ms || [];
       u.status = ev.status || "done";
+      // 完成后更新轮次为总轮数
+      if (ev.round_times && ev.round_times.length) {
+        u.round = ev.round_times.length;
+        u.total_rounds = ev.round_times.length;
+      }
       renderUsers();
     }
   }
@@ -2879,7 +2884,7 @@ function renderSummary(states) {
     if (roundCount > 1) html += `<th style="white-space:nowrap">总耗时(ms)</th>`;
     html += `</tr></thead><tbody>`;
     const statusText = { pending: "等待", login: "登录中", viewer: "进入阅片",
-      loading: "加载中", done: "✅完成", timeout: "⏱超时", stopped: "已停止", error: "❌出错" };
+      loading: "加载中", done: "✅ 完成", timeout: "⏱ 超时", stopped: "已停止", error: "❌ 出错" };
     for (const s of states) {
       const rt = s.round_times || [];
       let total = 0;

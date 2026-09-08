@@ -333,6 +333,9 @@ class TestEngine:
         self.emit({"type": "start", "users": self.users,
                    "accounts": accounts, "mode": "full", "ts": time.time()})
 
+        # 轮间同步屏障：所有用户完成第 N 轮后才开始第 N+1 轮
+        self.round_barriers = [asyncio.Barrier(self.users) for _ in range(self.rounds)]
+
         tasks = [self._run_user(i, cred) for i, cred in enumerate(creds)]
         await asyncio.gather(*tasks)
 
@@ -408,6 +411,9 @@ class TestEngine:
                    "total_frames": total, "mode": "frame_only",
                    "ts": time.time()})
 
+        # 轮间同步屏障
+        self.round_barriers = [asyncio.Barrier(self.users) for _ in range(self.rounds)]
+
         tasks = [self._run_user_frame_only(i, frame_urls)
                  for i in range(self.users)]
         await asyncio.gather(*tasks)
@@ -447,6 +453,12 @@ class TestEngine:
                            "round_ms": round_ms,
                            "frames_loaded": st.frames_loaded,
                            "ts": time.time()})
+                # 等待所有用户完成本轮后才开始下一轮
+                if round_idx < self.rounds - 1 and hasattr(self, "round_barriers"):
+                    try:
+                        await asyncio.wait_for(self.round_barriers[round_idx].wait(), timeout=600)
+                    except Exception:
+                        pass
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
         if self._stop:
@@ -558,6 +570,12 @@ class TestEngine:
                                "round_ms": round_ms,
                                "frames_loaded": st.frames_loaded,
                                "ts": time.time()})
+                # 等待所有用户完成本轮后才开始下一轮
+                if round_idx < self.rounds - 1 and hasattr(self, "round_barriers"):
+                    try:
+                        await asyncio.wait_for(self.round_barriers[round_idx].wait(), timeout=600)
+                    except Exception:
+                        pass
                 if not ok and not self._stop:
                     break  # 登录失败等致命错误，不再继续后续轮次
 
