@@ -651,6 +651,7 @@
     <input id="rounds" type="number" value="1" min="1" max="100" style="width:70px">
     <button id="btnStartFull" onclick="startTest('full')">全接口测试</button>
     <button id="btnStartFrame" onclick="startTest('frame_only')">图像加载测试</button>
+    <button id="btnStartBrowser" onclick="startTest('browser')">真实浏览器并发</button>
     <button class="btn2" onclick="saveModule('concurrency')">保存至历史记录</button>
     <button class="btn2" onclick="loadModule('concurrency')">加载上次</button>
     <button id="btnStop" class="stop" onclick="stopTest()" disabled>停止</button>
@@ -2367,7 +2368,9 @@ function handleEvent(ev) {
     document.getElementById("log").innerHTML = "";
     document.getElementById("summaryBody").innerHTML = "";
     renderUsers();
-    const modeText = mode === "frame_only" ? "图像加载测试" : (mode === "custom" ? "自定义接口测试" : "全接口测试");
+    const modeText = mode === "frame_only" ? "图像加载测试"
+      : (mode === "custom" ? "自定义接口测试"
+      : (mode === "browser" ? "真实浏览器并发" : "全接口测试"));
     addLog("info", `测试启动：${ev.users} 个用户（${modeText}）` +
       (totalFrames ? `，共 ${totalFrames} 张` : ""));
     // 根据模式更新统计标签文案

@@ -26,6 +26,7 @@ from engine import TestEngine, DEFAULT_CONFIG, parse_accounts, to_password_hash
 from record import Recorder
 from ui_test import UITestRunner, parse_excel_cases
 from vnc_recorder import VNCRecorder
+from browser_concurrency import BrowserConcurrencyRunner
 
 app = FastAPI(title="测试平台")
 
@@ -65,6 +66,10 @@ vnc_task: Optional[asyncio.Task] = None
 ui_runner: Optional[UITestRunner] = None
 ui_task: Optional[asyncio.Task] = None
 ui_cases: List[dict] = []
+
+# 真实浏览器并发测试状态
+browser_runner: Optional[BrowserConcurrencyRunner] = None
+browser_task: Optional[asyncio.Task] = None
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 SAVED_FILE = Path(__file__).parent / "saved_tests.json"
@@ -802,7 +807,10 @@ async def delete_saved_test(module: str, record_id: str) -> dict:
 @app.post("/api/start")
 async def start_test(payload: dict) -> dict:
     global engine, engine_task, current_test_name
+    global browser_runner, browser_task
     if engine_task and not engine_task.done():
+        return {"ok": False, "msg": "测试已在运行中"}
+    if browser_task and not browser_task.done():
         return {"ok": False, "msg": "测试已在运行中"}
 
     users = int(payload.get("users", 20))
@@ -823,6 +831,14 @@ async def start_test(payload: dict) -> dict:
     # 录制导入的自定义接口列表
     if payload.get("apis"):
         cfg["apis"] = payload["apis"]
+
+    # 真实浏览器并发模式
+    if mode == "browser":
+        headless = bool(payload.get("headless", True))
+        browser_runner = BrowserConcurrencyRunner(emit=broadcast, config=cfg)
+        browser_task = asyncio.create_task(
+            browser_runner.run(users, observe, headless=headless))
+        return {"ok": True, "msg": f"已启动 {users} 用户真实浏览器并发测试"}
 
     engine = TestEngine(users=users, observe_seconds=observe,
                         emit=broadcast, config=cfg, mode=mode, rounds=rounds)
@@ -855,15 +871,18 @@ async def list_upload_files() -> dict:
 
 @app.post("/api/stop")
 async def stop_test() -> dict:
-    global engine
+    global engine, browser_runner
     if engine:
         engine.stop()
+    if browser_runner:
+        browser_runner.stop()
     return {"ok": True, "msg": "已请求停止"}
 
 
 @app.get("/api/status")
 async def status() -> dict:
-    running = bool(engine_task and not engine_task.done())
+    running = bool((engine_task and not engine_task.done()) or
+                   (browser_task and not browser_task.done()))
     return {"running": running, "events": len(event_log)}
 
 
