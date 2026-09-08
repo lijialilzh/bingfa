@@ -1,8 +1,8 @@
 {
-  "base_url": "http://192.168.108.109:8000",
+  "base_url": "http://192.168.108.111:8000",
   "password": "123qwe",
-  "study_uid": "1.3.46.670589.28.68172260368172520200518000449629596",
-  "series_uid": "1.3.46.670589.28.681722603681725.20200518010931497060.2.2",
+  "study_uid": "1.2.840.113619.186.808617090127.20211019090528510.813",
+  "series_uid": "1.3.12.2.1107.5.1.4.75965.30000021101823365106500005691",
   "product": "XA_BRAIN",
   "accounts": [
     "test",
@@ -113,6 +113,7 @@
   "frame_prefix": "/xa_brain_encrypt/",
   "thumbnail_prefix": "/RESULT/thumbnail",
   "msg_token_prefix": "/api/v1/msg/token",
+  "frame_concurrency": 6,
   "login_path": "/app/center/login",
   "viewer_path_template": "/app/txzq/view/{study_uid}"
 }
