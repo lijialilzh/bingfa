@@ -52,6 +52,9 @@ clients: Set[WebSocket] = set()
 event_log: List[dict] = []          # 保留最近事件用于回放
 MAX_LOG = 5000
 current_test_name: str = ""         # 当前并发测试的名称
+# 每个 WebSocket 客户端的顺序发送队列（避免 create_task 并发导致事件乱序）
+_send_queues: Dict[WebSocket, asyncio.Queue] = {}
+_send_tasks: Dict[WebSocket, asyncio.Task] = {}
 
 # 录制状态
 recorder: Optional[Recorder] = None
@@ -110,18 +113,36 @@ def save_saved_tests(data: dict) -> None:
 
 
 def broadcast(event: dict) -> None:
-    """把事件推送给所有 WebSocket 客户端。"""
+    """把事件推送给所有 WebSocket 客户端（按顺序发送，避免乱序）。"""
     event_log.append(event)
     if len(event_log) > MAX_LOG:
         del event_log[: len(event_log) - MAX_LOG]
     dead = []
     for ws in clients:
         try:
-            asyncio.create_task(ws.send_text(json.dumps(event, ensure_ascii=False)))
+            q = _send_queues.get(ws)
+            if q is None:
+                q = asyncio.Queue()
+                _send_queues[ws] = q
+                _send_tasks[ws] = asyncio.create_task(_sender(ws, q))
+            q.put_nowait(json.dumps(event, ensure_ascii=False))
         except Exception:
             dead.append(ws)
     for ws in dead:
         clients.discard(ws)
+
+
+async def _sender(ws: WebSocket, q: asyncio.Queue) -> None:
+    """顺序发送队列中的消息。"""
+    try:
+        while True:
+            msg = await q.get()
+            await ws.send_text(msg)
+    except Exception:
+        pass
+    finally:
+        _send_queues.pop(ws, None)
+        _send_tasks.pop(ws, None)
 
 
 # ---------------- 登录认证 ----------------
@@ -710,6 +731,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
             await ws.receive_text()
     except WebSocketDisconnect:
         clients.discard(ws)
+        _send_queues.pop(ws, None)
+        _send_tasks.pop(ws, None)
 
 
 @app.get("/api/config")
