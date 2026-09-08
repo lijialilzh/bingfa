@@ -62,9 +62,11 @@ class BrowserConcurrencyRunner:
             data = resp.json()
             if data.get("code") != 10000:
                 raise RuntimeError(f"预登录失败: {data.get('msg', data)}")
-            # 检查列表
-            resp = await client.get(
-                self.base_url + "/api/v1/studies/query/online")
+            # 检查列表（POST 分页查询）
+            resp = await client.post(
+                self.base_url + "/api/v1/studies/query/online",
+                json={"order_by": [{"studyDate": "desc"}],
+                      "page": {"no": 1, "length": 100}})
             data = resp.json()
             items = (data.get("data") or {}).get("items") or []
             if not items:
