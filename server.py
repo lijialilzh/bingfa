@@ -1228,7 +1228,7 @@ async def aggregate() -> dict:
             tag_method[tag] = r.get("method", "GET")
 
     def avg(vals):
-        return round(statistics.mean(vals), 1) if vals else 0
+        return round(statistics.mean(vals) + 1e-9, 2) if vals else 0
 
     def build_summary(resp_list: list) -> list:
         """按 tag 分组统计一组响应，返回接口汇总列表（按调用顺序排序）。"""
@@ -1273,8 +1273,8 @@ async def aggregate() -> dict:
                 "结果": "✅ 通过" if ok else "❌ 失败",
                 "循环次数": info["成功"] + info["失败"],
                 "平均耗时": avg(info["耗时"]),
-                "最小耗时": round(min(info["耗时"]), 1) if info["耗时"] else 0,
-                "最大耗时": round(max(info["耗时"]), 1) if info["耗时"] else 0,
+                "最小耗时": round(min(info["耗时"]) + 1e-9, 2) if info["耗时"] else 0,
+                "最大耗时": round(max(info["耗时"]) + 1e-9, 2) if info["耗时"] else 0,
                 "大小": avg(info["大小"]),
             })
         return api_summary

@@ -2470,9 +2470,9 @@ function handleEvent(ev) {
       const viewerMs = ev.states.filter(s => s.viewer_ms > 0).map(s => s.viewer_ms);
       const allMs = ev.states.filter(s => s.all_frames_ms > 0).map(s => s.all_frames_ms);
       document.getElementById("sAvgLogin").textContent =
-        loginMs.length ? Math.round(avg(loginMs)) : "-";
+        loginMs.length ? fmt(avg(loginMs)) : "-";
       document.getElementById("sAvgViewer").textContent =
-        viewerMs.length ? Math.round(avg(viewerMs)) : "-";
+        viewerMs.length ? fmt(avg(viewerMs)) : "-";
       // 平均总耗时：多轮显示每次，单轮显示总平均
       let avgAllHtml = "-";
       if (allMs.length) {
@@ -2480,11 +2480,11 @@ function handleEvent(ev) {
           const parts = [];
           for (let r = 0; r < rounds; r++) {
             const rv = ev.states.filter(s => (s.round_times || []).length > r).map(s => s.round_times[r]);
-            if (rv.length) parts.push(`第${r+1}次: ${Math.round(avg(rv))}`);
+            if (rv.length) parts.push(`第${r+1}次: ${fmt(avg(rv))}`);
           }
           avgAllHtml = parts.join("<br>");
         } else {
-          avgAllHtml = Math.round(avg(allMs));
+          avgAllHtml = fmt(avg(allMs));
         }
       }
       document.getElementById("sAvgAll").innerHTML = avgAllHtml;
@@ -2783,12 +2783,12 @@ function updateStats() {
           .filter(u => (u.round_times || []).length > r)
           .map(u => u.round_times[r]);
         if (roundVals.length) {
-          parts.push(`第${r+1}次: ${Math.round(avg(roundVals))}`);
+          parts.push(`第${r+1}次: ${fmt(avg(roundVals))}`);
         }
       }
       avgAllHtml = parts.join("<br>");
     } else {
-      avgAllHtml = Math.round(avg(allMs));
+      avgAllHtml = fmt(avg(allMs));
     }
   }
 
@@ -2800,14 +2800,15 @@ function updateStats() {
   document.getElementById("sTimeout").textContent = timeout;
   document.getElementById("sError").textContent = err;
   document.getElementById("sAvgLogin").textContent =
-    loginMs.length ? Math.round(avg(loginMs)) : "-";
+    loginMs.length ? fmt(avg(loginMs)) : "-";
   document.getElementById("sAvgViewer").textContent =
-    viewerMs.length ? Math.round(avg(viewerMs)) : "-";
+    viewerMs.length ? fmt(avg(viewerMs)) : "-";
   document.getElementById("sAvgAll").innerHTML = avgAllHtml;
   document.getElementById("sFrames").textContent = framesTotal;
 }
 
 function avg(a) { return a.reduce((x, y) => x + y, 0) / a.length; }
+function fmt(n) { return Math.round(n * 100) / 100; }
 function pct(a, p) {
   if (!a.length) return 0;
   const s = [...a].sort((x, y) => x - y);
@@ -2853,11 +2854,11 @@ function renderSummary(states) {
       if (!arr.length && !roundValsArr.some(v => v && v.length)) continue;
       html += `<tr><td>${name}</td>`;
       for (const rv of roundValsArr) {
-        html += `<td class="num">${rv && rv.length ? Math.round(avg(rv)) : "-"}</td>`;
+        html += `<td class="num">${rv && rv.length ? fmt(avg(rv)) : "-"}</td>`;
       }
-      html += `<td class="num">${arr.length ? Math.round(avg(arr)) : "-"}</td>
-        <td class="num">${arr.length ? Math.round(Math.min(...arr)) : "-"}</td>
-        <td class="num">${arr.length ? Math.round(Math.max(...arr)) : "-"}</td></tr>`;
+      html += `<td class="num">${arr.length ? fmt(avg(arr)) : "-"}</td>
+        <td class="num">${arr.length ? fmt(Math.min(...arr)) : "-"}</td>
+        <td class="num">${arr.length ? fmt(Math.max(...arr)) : "-"}</td></tr>`;
     }
     html += `</tbody></table>`;
     return html;
@@ -2911,18 +2912,17 @@ function renderSummary(states) {
       if (!hasRoundData && arr.length) {
         const totalCols = roundHeaders.length + 3;
         html += `<tr><td>${name}</td>
-          <td class="num" colspan="${totalCols}" style="text-align:center;font-weight:600;color:var(--cyan)">${Math.round(avg(arr))} ms</td></tr>`;
+          <td class="num" colspan="${totalCols}" style="text-align:center;font-weight:600;color:var(--cyan)">${fmt(avg(arr))} ms</td></tr>`;
         continue;
       }
-      // 计算每轮的用户平均（即"第N次"列的值），avg/min/max 基于这些值
-      const roundAvgs = roundValsArr.map(rv => rv && rv.length ? avg(rv) : null).filter(v => v != null);
+      // avg/min/max 基于所有用户所有轮次的原始值（与聚合报告一致）
       html += `<tr><td>${name}</td>`;
       for (const rv of roundValsArr) {
-        html += `<td class="num">${rv && rv.length ? Math.round(avg(rv)) : "-"}</td>`;
+        html += `<td class="num">${rv && rv.length ? fmt(avg(rv)) : "-"}</td>`;
       }
-      html += `<td class="num">${roundAvgs.length ? Math.round(avg(roundAvgs)) : "-"}</td>
-        <td class="num">${roundAvgs.length ? Math.round(Math.min(...roundAvgs)) : "-"}</td>
-        <td class="num">${roundAvgs.length ? Math.round(Math.max(...roundAvgs)) : "-"}</td></tr>`;
+      html += `<td class="num">${arr.length ? fmt(avg(arr)) : "-"}</td>
+        <td class="num">${arr.length ? fmt(Math.min(...arr)) : "-"}</td>
+        <td class="num">${arr.length ? fmt(Math.max(...arr)) : "-"}</td></tr>`;
     }
     html += `</tbody></table>`;
     return html;
