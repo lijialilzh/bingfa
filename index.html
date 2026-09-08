@@ -2409,6 +2409,12 @@ function handleEvent(ev) {
       addLog("info", `[${ev.account}] 第 ${ev.round}/${ev.total_rounds} 轮开始`);
     }
   }
+  else if (ev.type === "round_done") {
+    // 循环轮次完成：记录该轮耗时
+    if (ev.total_rounds > 1) {
+      addLog("info", `[${ev.account}] 第 ${ev.round}/${ev.total_rounds} 轮完成：${ev.round_ms}ms（${ev.frames_loaded} 张）`);
+    }
+  }
   else if (ev.type === "user_done") {
     const u = users[ev.user_id];
     if (u) {
@@ -2766,6 +2772,18 @@ function renderSummary(states) {
     ["整套图像加载完成(ms)", allMs],
     ["图像张数加载数", frames],
   ];
+
+  // 循环多轮时，逐轮统计耗时
+  const roundCount = Math.max(0, ...states.map(s => (s.round_times || []).length));
+  if (roundCount > 1) {
+    for (let r = 0; r < roundCount; r++) {
+      const roundMs = states
+        .filter(s => (s.round_times || []).length > r)
+        .map(s => s.round_times[r]);
+      rows.push([`第 ${r + 1} 轮图像加载(ms)`, roundMs]);
+    }
+  }
+
   const body = document.getElementById("summaryBody");
   body.innerHTML = "";
   for (const [name, arr] of rows) {

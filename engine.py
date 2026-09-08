@@ -140,6 +140,7 @@ class UserState:
     all_frames_ms: float = 0.0       # 整套图像全部加载完成耗时
     frames_loaded: int = 0
     total_frames: int = 0            # 该检查的总帧数
+    round_times: list = None         # 每轮图像加载耗时（ms），循环多轮时逐轮记录
     # ---- 可审计证据 ----
     session_token: str = ""          # 登录后服务器下发的独立会话 token
     user_id_server: str = ""         # 服务器返回的 userId
@@ -147,6 +148,10 @@ class UserState:
     viewer_ts: float = 0.0           # 进入阅片的绝对时间戳
     first_frame_ts: float = 0.0      # 首帧请求的绝对时间戳
     error: str = ""
+
+    def __post_init__(self):
+        if self.round_times is None:
+            self.round_times = []
 
 
 class TestEngine:
@@ -417,8 +422,16 @@ class TestEngine:
                 self.emit({"type": "round_start", "user_id": user_id,
                            "account": st.account, "round": round_idx + 1,
                            "total_rounds": self.rounds, "ts": time.time()})
-                await self._download_frames(user_id, st.account, frame_urls,
-                                            set_size, client, st, t0)
+                round_ms = await self._download_frames(user_id, st.account,
+                                                       frame_urls, set_size,
+                                                       client, st, t0)
+                st.round_times.append(round_ms)
+                self.emit({"type": "round_done", "user_id": user_id,
+                           "account": st.account, "round": round_idx + 1,
+                           "total_rounds": self.rounds,
+                           "round_ms": round_ms,
+                           "frames_loaded": st.frames_loaded,
+                           "ts": time.time()})
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
         if self._stop:
@@ -431,6 +444,7 @@ class TestEngine:
                    "account": st.account, "frames_loaded": st.frames_loaded,
                    "total_frames": st.total_frames,
                    "all_frames_ms": st.all_frames_ms,
+                   "round_times": st.round_times,
                    "status": st.status, "ts": time.time()})
 
     async def _emit_req(self, user_id: int, account: str, method: str,
@@ -451,10 +465,14 @@ class TestEngine:
     async def _download_frames(self, user_id: int, account: str,
                                frame_urls: list[str], set_size: int,
                                client: httpx.AsyncClient, st: UserState,
-                               t0: float) -> None:
-        """并发下载一套图像帧（模拟浏览器同域名并发连接）。"""
+                               t0: float) -> float:
+        """并发下载一套图像帧（模拟浏览器同域名并发连接）。
+
+        返回本轮下载耗时（ms）。
+        """
         sem = asyncio.Semaphore(self.frame_concurrency)
         urls = [frame_urls[i % len(frame_urls)] for i in range(set_size)]
+        round_t0 = time.perf_counter()
 
         async def fetch_one(url: str) -> None:
             async with sem:
@@ -479,6 +497,7 @@ class TestEngine:
                                           elapsed, f"{type(e).__name__}: {e}")
 
         await asyncio.gather(*(fetch_one(u) for u in urls))
+        return round((time.perf_counter() - round_t0) * 1000, 1)
 
     async def _run_user(self, user_id: int, cred: dict) -> None:
         st = self.states[user_id]
@@ -679,8 +698,16 @@ class TestEngine:
                 self.emit({"type": "round_start", "user_id": user_id,
                            "account": account, "round": round_idx + 1,
                            "total_rounds": self.rounds, "ts": time.time()})
-                await self._download_frames(user_id, account, frame_urls,
-                                            set_size, client, st, t0)
+                round_ms = await self._download_frames(user_id, account,
+                                                       frame_urls, set_size,
+                                                       client, st, t0)
+                st.round_times.append(round_ms)
+                self.emit({"type": "round_done", "user_id": user_id,
+                           "account": account, "round": round_idx + 1,
+                           "total_rounds": self.rounds,
+                           "round_ms": round_ms,
+                           "frames_loaded": st.frames_loaded,
+                           "ts": time.time()})
 
             st.all_frames_ms = (time.perf_counter() - t0) * 1000
             if self._stop:
@@ -693,6 +720,7 @@ class TestEngine:
                        "account": account, "frames_loaded": st.frames_loaded,
                        "total_frames": st.total_frames,
                        "all_frames_ms": st.all_frames_ms,
+                       "round_times": st.round_times,
                        "status": st.status, "ts": time.time()})
 
     def _snapshot(self) -> list[dict]:
@@ -707,6 +735,7 @@ class TestEngine:
                 "all_frames_ms": round(s.all_frames_ms, 1),
                 "frames_loaded": s.frames_loaded,
                 "total_frames": s.total_frames,
+                "round_times": list(s.round_times),
                 "session_token": s.session_token,
                 "user_id_server": s.user_id_server,
                 "login_ts": round(s.login_ts, 3),
