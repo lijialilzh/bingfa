@@ -697,8 +697,6 @@
   </div>
 
   <div class="panel" style="margin-top:16px">
-    <h2>并发证据（可审计）</h2>
-    <div id="evidence" style="font-size:13px;color:var(--muted)">测试完成后显示</div>
     <div style="margin-top:10px">
       <button class="btn2" onclick="downloadReport()">导出报告 (JSON)</button>
     </div>
@@ -2495,7 +2493,6 @@ function handleEvent(ev) {
     }
     renderSummary(ev.states);
     addLog("info", "测试完成，结果已汇总");
-    loadEvidence();
     loadAggregate();
   }
   else if (ev.type === "record_request") {
@@ -3074,7 +3071,6 @@ async function clearLog() {
   // 清空前端显示
   document.getElementById("log").innerHTML = "";
   document.getElementById("summaryContainer").innerHTML = "";
-  document.getElementById("evidence").innerHTML = "测试完成后显示";
   users = [];
   framesTotal = 0;
   logCount = 0;
