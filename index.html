@@ -669,7 +669,7 @@
     <div class="stat"><div class="num" id="sAvgLogin">-</div><div class="lbl">平均登录(ms)</div></div>
     <div class="stat"><div class="num" id="sAvgViewer">-</div><div class="lbl" id="lblAvgViewer">平均阅片页(ms)</div></div>
     <div class="stat"><div class="num" id="sAvgAll">-</div><div class="lbl" id="lblAvgAll">平均整套图像加载(ms)</div></div>
-    <div class="stat"><div class="num" id="sFrames">0</div><div class="lbl" id="lblFrames">图像帧请求总数</div></div>
+    <div class="stat"><div class="num" id="sFrames">0</div><div class="lbl" id="lblFrames">图像张数请求总数</div></div>
   </div>
 
   <div class="grid-wrap">
@@ -2369,7 +2369,7 @@ function handleEvent(ev) {
     renderUsers();
     const modeText = mode === "frame_only" ? "图像加载测试" : (mode === "custom" ? "自定义接口测试" : "全接口测试");
     addLog("info", `测试启动：${ev.users} 个用户（${modeText}）` +
-      (totalFrames ? `，共 ${totalFrames} 帧` : ""));
+      (totalFrames ? `，共 ${totalFrames} 张` : ""));
     // 根据模式更新统计标签文案
     updateStatLabels(mode);
     setRunning(true);
@@ -2598,7 +2598,7 @@ async function loadEvidence() {
     <div style="margin-bottom:8px">
       <b>登录时间戳极差：</b>${data.login_spread_seconds} 秒 &nbsp;&nbsp;
       <b>进入阅片时间戳极差：</b>${data.viewer_spread_seconds} 秒 &nbsp;&nbsp;
-      <b>首帧请求时间戳极差：</b>${data.first_frame_spread_seconds} 秒
+      <b>首张请求时间戳极差：</b>${data.first_frame_spread_seconds} 秒
       <div style="color:var(--muted);font-size:12px">极差越小，说明越接近"同时"发起</div>
     </div>`;
 }
@@ -2663,7 +2663,7 @@ function renderUsers() {
         const pct = total > 0 ? Math.min(100, Math.round(u.frames / total * 100)) : 0;
         progress = `
           <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-          <div class="st">${u.frames}/${total || "?"} 帧 (${pct}%)</div>`;
+          <div class="st">${u.frames}/${total || "?"} 张 (${pct}%)</div>`;
       }
     }
 
@@ -2709,7 +2709,7 @@ function updateStatLabels(mode) {
     set("lblDone", "加载完成");
     set("lblAvgViewer", "平均阅片页(ms)");
     set("lblAvgAll", "平均整套图像加载(ms)");
-    set("lblFrames", "图像帧请求总数");
+    set("lblFrames", "图像张数请求总数");
   }
 }
 
@@ -2759,9 +2759,9 @@ function renderSummary(states) {
   const rows = [
     ["登录耗时(ms)", loginMs],
     ["阅片页加载(ms)", viewerMs],
-    ["首帧耗时(ms)", firstMs],
+    ["首张耗时(ms)", firstMs],
     ["整套图像加载完成(ms)", allMs],
-    ["图像帧加载数", frames],
+    ["图像张数加载数", frames],
   ];
   const body = document.getElementById("summaryBody");
   body.innerHTML = "";

@@ -317,11 +317,40 @@ class TestEngine:
                    "ts": time.time()})
 
     async def _run_frame_only(self) -> None:
-        """只压测图像帧接口：先获取帧列表，再循环下载。"""
+        """只压测图像帧接口：先通过 study_uid 解析序列，再获取帧列表，循环下载。"""
         self.emit({"type": "progress",
-                   "msg": "准备：获取图像帧列表 (dcp) ...", "ts": time.time()})
+                   "msg": "准备：获取图像元数据 (studies) ...", "ts": time.time()})
+        # 1. 通过 study_uid 获取序列列表，自动解析 series_uid（换图后无需手动改 series_uid）
+        series_uids: list[str] = []
+        studies_url = (self.base_url + self.studies_api_path +
+                       f"?studyInstanceUID={self.study_uid}&taskType=xa_brain&product=XA_BRAIN")
+        try:
+            async with httpx.AsyncClient(timeout=60) as client:
+                resp = await client.get(studies_url)
+                data = resp.json()
+                for study in data.get("data", []):
+                    for series in study.get("series", []):
+                        suid = series.get("seriesInstanceUID")
+                        if suid:
+                            series_uids.append(suid)
+        except Exception as e:
+            self.emit({"type": "error",
+                       "msg": f"获取图像元数据失败: {type(e).__name__}: {e}",
+                       "ts": time.time()})
+            return
+        if not series_uids:
+            self.emit({"type": "error",
+                       "msg": "未获取到序列，请检查 study_uid 是否正确",
+                       "ts": time.time()})
+            return
+        # 优先用配置的 series_uid（若在列表中），否则用第一个序列
+        series_uid = self.series_uid if self.series_uid in series_uids else series_uids[0]
+
+        self.emit({"type": "progress",
+                   "msg": f"准备：获取图像帧列表 (dcp, 共 {len(series_uids)} 个序列) ...",
+                   "ts": time.time()})
         dcp_url = self.base_url + self.dcp_api_path_template.format(
-            series_uid=self.series_uid)
+            series_uid=series_uid)
         frame_urls = []
         try:
             async with httpx.AsyncClient(timeout=60) as client:
