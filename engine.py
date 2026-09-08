@@ -574,6 +574,10 @@ class TestEngine:
                    "total_frames": st.total_frames,
                    "all_frames_ms": st.all_frames_ms,
                    "round_times": st.round_times,
+                   "round_login_ms": st.round_login_ms,
+                   "round_viewer_ms": st.round_viewer_ms,
+                   "round_first_frame_ms": st.round_first_frame_ms,
+                   "round_frame_ms": st.round_frame_ms,
                    "status": st.status, "ts": time.time()})
 
     async def _run_user_one_round(self, user_id: int, account: str,

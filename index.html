@@ -2422,6 +2422,10 @@ function handleEvent(ev) {
       u.total_frames = ev.total_frames || 0;
       u.all_frames_ms = ev.all_frames_ms || 0;
       u.round_times = ev.round_times || u.round_times || [];
+      u.round_login_ms = ev.round_login_ms || u.round_login_ms || [];
+      u.round_viewer_ms = ev.round_viewer_ms || u.round_viewer_ms || [];
+      u.round_first_frame_ms = ev.round_first_frame_ms || u.round_first_frame_ms || [];
+      u.round_frame_ms = ev.round_frame_ms || u.round_frame_ms || [];
       u.status = ev.status || "done";
       renderUsers();
     }
@@ -2466,8 +2470,8 @@ function handleEvent(ev) {
     // 用最终 states 更新统计卡片
     if (ev.states && ev.states.length) {
       const rounds = parseInt(document.getElementById("rounds")?.value) || 1;
-      const loginMs = ev.states.filter(s => s.login_ms > 0).map(s => s.login_ms);
-      const viewerMs = ev.states.filter(s => s.viewer_ms > 0).map(s => s.viewer_ms);
+      const loginMs = ev.states.flatMap(s => (s.round_login_ms || []).filter(v => v > 0));
+      const viewerMs = ev.states.flatMap(s => (s.round_viewer_ms || []).filter(v => v > 0));
       const allMs = ev.states.filter(s => s.all_frames_ms > 0).map(s => s.all_frames_ms);
       document.getElementById("sAvgLogin").textContent =
         loginMs.length ? fmt(avg(loginMs)) : "-";
@@ -2768,8 +2772,8 @@ function updateStats() {
   const done = users.filter(u => u.status === "done").length;
   const timeout = users.filter(u => u.status === "timeout").length;
   const err = users.filter(u => u.status === "error").length;
-  const loginMs = users.filter(u => u.login_ms > 0).map(u => u.login_ms);
-  const viewerMs = users.filter(u => u.viewer_ms > 0).map(u => u.viewer_ms);
+  const loginMs = users.flatMap(u => (u.round_login_ms || []).filter(v => v > 0));
+  const viewerMs = users.flatMap(u => (u.round_viewer_ms || []).filter(v => v > 0));
   const allMs = users.filter(u => u.all_frames_ms > 0).map(u => u.all_frames_ms);
   // 统计卡片：多轮时显示每次平均耗时，单轮时显示总平均
   const rounds = parseInt(document.getElementById("rounds")?.value) || 1;
@@ -2821,11 +2825,14 @@ function renderSummary(states) {
   if (!container) return;
   container.innerHTML = "";
 
-  const loginMs = states.filter(s => s.login_ms > 0).map(s => s.login_ms);
-  const viewerMs = states.filter(s => s.viewer_ms > 0).map(s => s.viewer_ms);
-  const firstMs = states.filter(s => s.first_frame_ms > 0).map(s => s.first_frame_ms);
+  // 展开所有用户所有轮次的值（与聚合报告口径一致）
+  const loginMs = states.flatMap(s => (s.round_login_ms || []).filter(v => v > 0));
+  const viewerMs = states.flatMap(s => (s.round_viewer_ms || []).filter(v => v > 0));
+  const firstMs = states.flatMap(s => (s.round_first_frame_ms || []).filter(v => v > 0));
   const allMs = states.filter(s => s.all_frames_ms > 0).map(s => s.all_frames_ms);
   const frames = states.filter(s => s.frames_loaded > 0).map(s => s.frames_loaded);
+  const allFrameMs = states.flatMap(s => (s.round_frame_ms || []).filter(v => v > 0));
+  const allRoundMs = states.flatMap(s => (s.round_times || []).filter(v => v > 0));
 
   // 循环轮数
   const roundCount = Math.max(0, ...states.map(s => (s.round_times || []).length));
@@ -2928,9 +2935,7 @@ function renderSummary(states) {
     return html;
   }
 
-  // 汇总统计表：始终显示"第N次"列，格式统一
-  const allFrameMs = states.map(s => (s.round_frame_ms || [])[0] || 0).filter(v => v > 0);
-  const allRoundMs = states.map(s => (s.round_times || [])[0] || 0).filter(v => v > 0);
+  // 汇总统计表
   const overallRows = [
     ["登录耗时(ms)", loginMs,
       ...Array.from({ length: roundCount }, (_, r) =>
