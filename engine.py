@@ -585,6 +585,7 @@ class TestEngine:
         r_login = 0.0
         r_viewer = 0.0
         r_first = 0.0
+        t_login_ok = 0.0
         # ---- 1. 登录 ----
         login_url = self.base_url + self.login_api_path
         login_body = json.dumps({"name": account, "password": pwd_hash})
@@ -602,6 +603,7 @@ class TestEngine:
                 st.session_token = resp.cookies.get("token", "")
                 st.user_id_server = str(data.get("data", {}).get("userId", ""))
                 st.viewer_ts = time.time()
+                t_login_ok = time.perf_counter()
                 await self._emit_resp(user_id, account, resp.status_code,
                                       login_url, "登录", elapsed,
                                       size=len(resp.content))
@@ -762,9 +764,13 @@ class TestEngine:
                                   elapsed, f"{type(e).__name__}: {e}")
 
         # ---- 6. 图像帧 ----
-        r_viewer = round((time.perf_counter() - t_req) * 1000, 1) if st.viewer_ts else 0
+        # viewer_ms = 登录成功到开始下载图像帧的耗时（会话校验+消息令牌+检查列表+元数据+序列数据+缩略图）
+        r_viewer = round((time.perf_counter() - t_login_ok) * 1000, 1) if t_login_ok > 0 else 0
         st.viewer_ms = r_viewer
         st.status = "loading"
+        self.emit({"type": "viewer_ok", "user_id": user_id,
+                   "account": account, "viewer_ms": r_viewer,
+                   "ts": time.time()})
         self.emit({"type": "user_status", "user_id": user_id,
                    "account": account, "status": "loading", "ts": time.time()})
         if not frame_urls:
