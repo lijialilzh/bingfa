@@ -10,6 +10,9 @@ __pycache__/
 # 运行时数据（测试历史记录）
 saved_tests.json
 
+# 本地配置（每台机器不同，不入库；模板见 config.example.json）
+config.json
+
 # 上传文件（大文件，不入库）
 uploads/
 *.zip
