@@ -5,7 +5,14 @@
 set -e
 
 echo "=== 1. 安装系统软件包（Xvfb 虚拟显示 + x11vnc）==="
-sudo apt-get update
+# 修复 Google Chrome 源公钥缺失问题（NO_PUBKEY FD533C07C264648F）
+if ! sudo apt-key list 2>/dev/null | grep -q "FD533C07C264648F"; then
+  echo "  添加 Google Chrome 公钥..."
+  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
+    | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
+fi
+# apt-get update 容错：单个源失败不中断
+sudo apt-get update || true
 sudo apt-get install -y xvfb x11vnc
 
 echo "=== 2. 安装 Python 依赖（websockify）==="
