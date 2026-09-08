@@ -8,6 +8,9 @@ echo "=== 1. 安装系统软件包（Xvfb 虚拟显示 + x11vnc）==="
 # 修复 Google Chrome 源公钥缺失问题（NO_PUBKEY FD533C07C264648F）
 if ! sudo apt-key list 2>/dev/null | grep -q "FD533C07C264648F"; then
   echo "  添加 Google Chrome 公钥..."
+  # 方式1：加入 apt-key 信任密钥环（旧格式源列表）
+  curl -fsSL https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add - || true
+  # 方式2：同时写入 keyring 文件（新版 signed-by 格式源列表）
   curl -fsSL https://dl.google.com/linux/linux_signing_key.pub \
     | sudo gpg --dearmor -o /usr/share/keyrings/google-chrome.gpg 2>/dev/null || true
 fi
