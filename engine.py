@@ -41,6 +41,8 @@ DEFAULT_CONFIG = {
     "frame_prefix": "/xa_brain_encrypt/",
     "thumbnail_prefix": "/RESULT/thumbnail",
     "msg_token_prefix": "/api/v1/msg/token",
+    # 每个用户内部并发下载图像帧的连接数（模拟浏览器同域名并发连接）
+    "frame_concurrency": 6,
 }
 
 def _is_hash(s: str) -> bool:
@@ -175,6 +177,8 @@ class TestEngine:
         self.frame_prefix = cfg.get("frame_prefix", "/xa_brain_encrypt/")
         self.thumbnail_prefix = cfg.get("thumbnail_prefix", "/RESULT/thumbnail")
         self.msg_token_prefix = cfg.get("msg_token_prefix", "/api/v1/msg/token")
+        # 每个用户内部并发下载图像帧的连接数（模拟浏览器同域名并发连接）
+        self.frame_concurrency = max(1, int(cfg.get("frame_concurrency", 6) or 6))
         # 自定义接口列表（录制导入），存在则并发测试按此列表循环调用
         self.custom_apis = cfg.get("apis") or []
         # credentials: [{"account": str, "password": str|None}]
@@ -413,27 +417,8 @@ class TestEngine:
                 self.emit({"type": "round_start", "user_id": user_id,
                            "account": st.account, "round": round_idx + 1,
                            "total_rounds": self.rounds, "ts": time.time()})
-                for i in range(set_size):
-                    if self._stop:
-                        break
-                    url = frame_urls[i % len(frame_urls)]
-                    t_req = time.perf_counter()
-                    await self._emit_req(user_id, st.account, "GET", url, "图像帧")
-                    try:
-                        resp = await client.get(url)
-                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                        if resp.status_code == 200:
-                            st.frames_loaded += 1
-                            if st.first_frame_ts == 0.0:
-                                st.first_frame_ts = time.time()
-                                st.first_frame_ms = (t_req - t0) * 1000
-                        await self._emit_resp(user_id, st.account, resp.status_code,
-                                              url, "图像帧", elapsed,
-                                              size=len(resp.content))
-                    except Exception as e:
-                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                        await self._emit_resp(user_id, st.account, 0, url, "图像帧",
-                                              elapsed, f"{type(e).__name__}: {e}")
+                await self._download_frames(user_id, st.account, frame_urls,
+                                            set_size, client, st, t0)
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
         if self._stop:
@@ -462,6 +447,38 @@ class TestEngine:
         if error:
             ev["error"] = error
         self.emit(ev)
+
+    async def _download_frames(self, user_id: int, account: str,
+                               frame_urls: list[str], set_size: int,
+                               client: httpx.AsyncClient, st: UserState,
+                               t0: float) -> None:
+        """并发下载一套图像帧（模拟浏览器同域名并发连接）。"""
+        sem = asyncio.Semaphore(self.frame_concurrency)
+        urls = [frame_urls[i % len(frame_urls)] for i in range(set_size)]
+
+        async def fetch_one(url: str) -> None:
+            async with sem:
+                if self._stop:
+                    return
+                t_req = time.perf_counter()
+                await self._emit_req(user_id, account, "GET", url, "图像帧")
+                try:
+                    resp = await client.get(url)
+                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                    if resp.status_code == 200:
+                        st.frames_loaded += 1
+                        if st.first_frame_ts == 0.0:
+                            st.first_frame_ts = time.time()
+                            st.first_frame_ms = (t_req - t0) * 1000
+                    await self._emit_resp(user_id, account, resp.status_code,
+                                          url, "图像帧", elapsed,
+                                          size=len(resp.content))
+                except Exception as e:
+                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                    await self._emit_resp(user_id, account, 0, url, "图像帧",
+                                          elapsed, f"{type(e).__name__}: {e}")
+
+        await asyncio.gather(*(fetch_one(u) for u in urls))
 
     async def _run_user(self, user_id: int, cred: dict) -> None:
         st = self.states[user_id]
@@ -662,27 +679,8 @@ class TestEngine:
                 self.emit({"type": "round_start", "user_id": user_id,
                            "account": account, "round": round_idx + 1,
                            "total_rounds": self.rounds, "ts": time.time()})
-                for i in range(set_size):
-                    if self._stop:
-                        break
-                    url = frame_urls[i % len(frame_urls)]
-                    t_req = time.perf_counter()
-                    await self._emit_req(user_id, account, "GET", url, "图像帧")
-                    try:
-                        resp = await client.get(url)
-                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                        if resp.status_code == 200:
-                            st.frames_loaded += 1
-                            if st.first_frame_ts == 0.0:
-                                st.first_frame_ts = time.time()
-                                st.first_frame_ms = (t_req - t0) * 1000
-                        await self._emit_resp(user_id, account, resp.status_code,
-                                              url, "图像帧", elapsed,
-                                              size=len(resp.content))
-                    except Exception as e:
-                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                        await self._emit_resp(user_id, account, 0, url, "图像帧",
-                                              elapsed, f"{type(e).__name__}: {e}")
+                await self._download_frames(user_id, account, frame_urls,
+                                            set_size, client, st, t0)
 
             st.all_frames_ms = (time.perf_counter() - t0) * 1000
             if self._stop:
