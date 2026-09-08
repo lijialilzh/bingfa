@@ -20,6 +20,7 @@ import json
 import re
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 import httpx
@@ -151,11 +152,12 @@ class TestEngine:
 
     def __init__(self, users: int, observe_seconds: float,
                  emit: Callable[[dict], None], config: Optional[dict] = None,
-                 mode: str = "full"):
+                 mode: str = "full", rounds: int = 1):
         self.users = users
         self.observe_seconds = observe_seconds
         self.emit = emit
         self.mode = mode
+        self.rounds = rounds
         self.states: dict[int, UserState] = {}
         self._stop = False
 
@@ -191,7 +193,8 @@ class TestEngine:
             await self._run_full()
 
     async def _run_custom(self) -> None:
-        """按录制导入的接口列表循环压测。"""
+        """按录制导入的接口列表循环压测。
+        每个用户把接口列表循环执行 rounds 轮（默认 1 轮），执行完即停。"""
         creds = self.credentials[: self.users]
         accounts = [c["account"] for c in creds]
         self.states = {i: UserState(user_id=i, account=accounts[i])
@@ -218,7 +221,9 @@ class TestEngine:
                    "account": account, "status": "loading", "ts": time.time()})
 
         t0 = time.perf_counter()
-        deadline = t0 + self.observe_seconds
+        # 自定义接口模式：按轮数执行，每轮把接口列表从头到尾执行一遍
+        rounds = max(1, int(getattr(self, "rounds", 1) or 1))
+        total_requests = len(self.custom_apis) * rounds
 
         def fill(text: str) -> str:
             return (text
@@ -228,42 +233,68 @@ class TestEngine:
                     .replace("{series_uid}", self.series_uid))
 
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            idx = 0
-            while time.perf_counter() < deadline and not self._stop:
-                api = self.custom_apis[idx % len(self.custom_apis)]
-                idx += 1
-                name = api.get("name") or api.get("url", "接口")
-                method = (api.get("method") or "GET").upper()
-                url = fill(api.get("url", ""))
-                body = fill(api.get("body", ""))
-                content_type = api.get("content_type") or "application/json"
-                if not url:
-                    continue
-                if url.startswith("/"):
-                    url = self.base_url + url
-                t_req = time.perf_counter()
-                await self._emit_req(user_id, account, method, url, name)
-                try:
-                    if method == "POST":
-                        if content_type == "application/x-www-form-urlencoded":
-                            resp = await client.post(url, data=body,
-                                                     headers={"Content-Type": content_type})
+            for round_idx in range(rounds):
+                if self._stop:
+                    break
+                # 广播轮次开始
+                self.emit({"type": "round_start", "user_id": user_id,
+                           "account": account, "round": round_idx + 1,
+                           "total_rounds": rounds, "ts": time.time()})
+                for api in self.custom_apis:
+                    if self._stop:
+                        break
+                    name = api.get("name") or api.get("url", "接口")
+                    method = (api.get("method") or "GET").upper()
+                    url = fill(api.get("url", ""))
+                    body = fill(api.get("body", ""))
+                    content_type = api.get("content_type") or "application/json"
+                    # 文件上传接口：multipart/form-data
+                    upload_file = api.get("upload_file") or ""
+                    upload_field = api.get("upload_field") or "file"
+                    if not url:
+                        continue
+                    if url.startswith("/"):
+                        url = self.base_url + url
+                    t_req = time.perf_counter()
+                    await self._emit_req(user_id, account, method, url, name)
+                    try:
+                        if method == "POST":
+                            if upload_file:
+                                # multipart 文件上传
+                                file_path = Path(__file__).parent / "uploads" / upload_file
+                                if not file_path.exists():
+                                    raise RuntimeError(f"上传文件不存在：{upload_file}")
+                                with open(file_path, "rb") as f:
+                                    files = {upload_field: (upload_file, f, "application/octet-stream")}
+                                    # 额外字段（如 name=null）
+                                    extra_data = {}
+                                    if body:
+                                        try:
+                                            extra_data = json.loads(body)
+                                        except Exception:
+                                            extra_data = {}
+                                    resp = await client.post(url, files=files, data=extra_data)
+                            elif content_type == "application/x-www-form-urlencoded":
+                                resp = await client.post(url, data=body,
+                                                         headers={"Content-Type": content_type})
+                            else:
+                                resp = await client.post(url, content=body,
+                                                         headers={"Content-Type": content_type})
                         else:
-                            resp = await client.post(url, content=body,
-                                                     headers={"Content-Type": content_type})
-                    else:
-                        resp = await client.get(url)
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    await self._emit_resp(user_id, account, resp.status_code,
-                                          url, name, elapsed,
-                                          size=len(resp.content))
-                except Exception as e:
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    await self._emit_resp(user_id, account, 0, url, name,
-                                          elapsed, f"{type(e).__name__}: {e}")
+                            resp = await client.get(url)
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        st.frames_loaded += 1  # 请求计数
+                        await self._emit_resp(user_id, account, resp.status_code,
+                                              url, name, elapsed,
+                                              size=len(resp.content))
+                    except Exception as e:
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        st.frames_loaded += 1  # 失败也计数
+                        await self._emit_resp(user_id, account, 0, url, name,
+                                              elapsed, f"{type(e).__name__}: {e}")
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
-        st.status = "done"
+        st.status = "stopped" if self._stop else "done"
         self.emit({"type": "user_done", "user_id": user_id,
                    "account": account, "frames_loaded": st.frames_loaded,
                    "total_frames": st.total_frames,
@@ -334,35 +365,44 @@ class TestEngine:
 
         t0 = time.perf_counter()
         st.viewer_ts = time.time()
-        deadline = t0 + self.observe_seconds
 
         async with httpx.AsyncClient(timeout=120) as client:
-            idx = 0
-            while time.perf_counter() < deadline and not self._stop:
-                if st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+            # 一套帧的数量：优先用 total_frames，否则用帧列表长度
+            set_size = st.total_frames if st.total_frames > 0 else len(frame_urls)
+            for round_idx in range(self.rounds):
+                if self._stop:
                     break
-                url = frame_urls[idx % len(frame_urls)]
-                idx += 1
-                t_req = time.perf_counter()
-                await self._emit_req(user_id, st.account, "GET", url, "图像帧")
-                try:
-                    resp = await client.get(url)
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    if resp.status_code == 200:
-                        st.frames_loaded += 1
-                        if st.first_frame_ts == 0.0:
-                            st.first_frame_ts = time.time()
-                            st.first_frame_ms = (t_req - t0) * 1000
-                    await self._emit_resp(user_id, st.account, resp.status_code,
-                                          url, "图像帧", elapsed,
-                                          size=len(resp.content))
-                except Exception as e:
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    await self._emit_resp(user_id, st.account, 0, url, "图像帧",
-                                          elapsed, f"{type(e).__name__}: {e}")
+                # 每轮重置帧计数，进度从 0 开始
+                st.frames_loaded = 0
+                self.emit({"type": "round_start", "user_id": user_id,
+                           "account": st.account, "round": round_idx + 1,
+                           "total_rounds": self.rounds, "ts": time.time()})
+                for i in range(set_size):
+                    if self._stop:
+                        break
+                    url = frame_urls[i % len(frame_urls)]
+                    t_req = time.perf_counter()
+                    await self._emit_req(user_id, st.account, "GET", url, "图像帧")
+                    try:
+                        resp = await client.get(url)
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        if resp.status_code == 200:
+                            st.frames_loaded += 1
+                            if st.first_frame_ts == 0.0:
+                                st.first_frame_ts = time.time()
+                                st.first_frame_ms = (t_req - t0) * 1000
+                        await self._emit_resp(user_id, st.account, resp.status_code,
+                                              url, "图像帧", elapsed,
+                                              size=len(resp.content))
+                    except Exception as e:
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        await self._emit_resp(user_id, st.account, 0, url, "图像帧",
+                                              elapsed, f"{type(e).__name__}: {e}")
 
         st.all_frames_ms = (time.perf_counter() - t0) * 1000
-        if st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+        if self._stop:
+            st.status = "stopped"
+        elif st.total_frames > 0 and st.frames_loaded >= st.total_frames:
             st.status = "done"
         else:
             st.status = "timeout"
@@ -399,7 +439,6 @@ class TestEngine:
 
         t0 = time.perf_counter()
         t_login_ok = 0.0
-        deadline = t0 + self.observe_seconds
 
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
             # ---- 1. 登录 ----
@@ -548,7 +587,7 @@ class TestEngine:
                 await self._emit_resp(user_id, account, 0, thumb_url, "缩略图",
                                       elapsed, f"{type(e).__name__}: {e}")
 
-            # ---- 6. 图像帧（循环下载，直到超时或全部加载完） ----
+            # ---- 6. 图像帧（循环 rounds 轮，每轮加载一套帧） ----
             if t_login_ok > 0:
                 st.viewer_ms = (time.perf_counter() - t_login_ok) * 1000
             st.status = "loading"
@@ -563,32 +602,42 @@ class TestEngine:
                            "ts": time.time()})
                 return
 
-            idx = 0
-            while time.perf_counter() < deadline and not self._stop:
-                if st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+            # 一套帧的数量：优先用 total_frames，否则用帧列表长度
+            set_size = st.total_frames if st.total_frames > 0 else len(frame_urls)
+            for round_idx in range(self.rounds):
+                if self._stop:
                     break
-                url = frame_urls[idx % len(frame_urls)]
-                idx += 1
-                t_req = time.perf_counter()
-                await self._emit_req(user_id, account, "GET", url, "图像帧")
-                try:
-                    resp = await client.get(url)
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    if resp.status_code == 200:
-                        st.frames_loaded += 1
-                        if st.first_frame_ts == 0.0:
-                            st.first_frame_ts = time.time()
-                            st.first_frame_ms = (t_req - t0) * 1000
-                    await self._emit_resp(user_id, account, resp.status_code,
-                                          url, "图像帧", elapsed,
-                                          size=len(resp.content))
-                except Exception as e:
-                    elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                    await self._emit_resp(user_id, account, 0, url, "图像帧",
-                                          elapsed, f"{type(e).__name__}: {e}")
+                # 每轮重置帧计数，进度从 0 开始
+                st.frames_loaded = 0
+                self.emit({"type": "round_start", "user_id": user_id,
+                           "account": account, "round": round_idx + 1,
+                           "total_rounds": self.rounds, "ts": time.time()})
+                for i in range(set_size):
+                    if self._stop:
+                        break
+                    url = frame_urls[i % len(frame_urls)]
+                    t_req = time.perf_counter()
+                    await self._emit_req(user_id, account, "GET", url, "图像帧")
+                    try:
+                        resp = await client.get(url)
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        if resp.status_code == 200:
+                            st.frames_loaded += 1
+                            if st.first_frame_ts == 0.0:
+                                st.first_frame_ts = time.time()
+                                st.first_frame_ms = (t_req - t0) * 1000
+                        await self._emit_resp(user_id, account, resp.status_code,
+                                              url, "图像帧", elapsed,
+                                              size=len(resp.content))
+                    except Exception as e:
+                        elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+                        await self._emit_resp(user_id, account, 0, url, "图像帧",
+                                              elapsed, f"{type(e).__name__}: {e}")
 
             st.all_frames_ms = (time.perf_counter() - t0) * 1000
-            if st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+            if self._stop:
+                st.status = "stopped"
+            elif st.total_frames > 0 and st.frames_loaded >= st.total_frames:
                 st.status = "done"
             else:
                 st.status = "timeout"

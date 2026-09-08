@@ -57,6 +57,8 @@ ui_cases: List[dict] = []
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 SAVED_FILE = Path(__file__).parent / "saved_tests.json"
+UPLOAD_DIR = Path(__file__).parent / "uploads"   # 上传文件保存目录
+UPLOAD_DIR.mkdir(exist_ok=True)
 
 
 def load_config() -> dict:
@@ -306,7 +308,8 @@ async def multi_test(payload: dict) -> dict:
                 .replace("{account}", account)
                 .replace("{password_hash}", pwd_hash))
 
-    async def call(name, method, url, body=None, content_type="application/json"):
+    async def call(name, method, url, body=None, content_type="application/json",
+                   upload_file="", upload_field="file"):
         parsed = urlparse(url)
         req_info = {
             "method": method,
@@ -329,7 +332,21 @@ async def multi_test(payload: dict) -> dict:
             try:
                 async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
                     if method == "POST":
-                        if content_type == "application/x-www-form-urlencoded":
+                        if upload_file:
+                            # multipart 文件上传
+                            file_path = Path(__file__).parent / "uploads" / upload_file
+                            if not file_path.exists():
+                                raise RuntimeError(f"上传文件不存在：{upload_file}")
+                            with open(file_path, "rb") as f:
+                                files = {upload_field: (upload_file, f, "application/octet-stream")}
+                                extra_data = {}
+                                if body:
+                                    try:
+                                        extra_data = json.loads(body)
+                                    except Exception:
+                                        extra_data = {}
+                                resp = await client.post(url, files=files, data=extra_data)
+                        elif content_type == "application/x-www-form-urlencoded":
                             resp = await client.post(url, data=body,
                                                      headers={"Content-Type": content_type})
                         else:
@@ -358,7 +375,15 @@ async def multi_test(payload: dict) -> dict:
                 last_status = 0
                 last_body = f"{type(e).__name__}: {e}"
         ok = last_status < 400
-        results.append({
+        # 业务码检查：响应体 JSON 含 code 字段时，非成功值视为失败
+        biz_error = ""
+        if isinstance(last_body, dict) and "code" in last_body:
+            code = last_body.get("code")
+            # 成功业务码：10000（登录等）、200（上传等）
+            if code not in (10000, 200):
+                ok = False
+                biz_error = f"业务码 {code}：{last_body.get('msg') or last_body.get('message') or '未知错误'}"
+        result_item = {
             "接口": name,
             "结果": "✅ 通过" if ok else "❌ 失败",
             "请求": req_info,
@@ -374,8 +399,13 @@ async def multi_test(payload: dict) -> dict:
                 "Content-Type": last_ct,
                 "响应头": dict(last_resp.headers) if last_resp else {},
                 "响应体": last_body,
+                "业务错误": biz_error,
             },
-        })
+        }
+        results.append(result_item)
+        # 实时推送单个接口结果
+        broadcast({"type": "multi_api_result", "result": result_item,
+                   "ts": time.time()})
         return last_resp
 
     for api in apis:
@@ -384,13 +414,18 @@ async def multi_test(payload: dict) -> dict:
         url = api.get("url", "")
         body = api.get("body", "")
         content_type = api.get("content_type") or "application/json"
+        upload_file = api.get("upload_file") or ""
+        upload_field = api.get("upload_field") or "file"
         if not url:
-            results.append({"接口": name, "结果": "⚠️ 跳过",
-                            "请求": {"method": method, "url": "", "host": "", "port": 0,
-                                     "path": "", "query": "", "headers": {}, "body": ""},
-                            "响应": {"状态码": 0, "耗时(ms)": 0, "平均耗时(ms)": 0,
-                                     "最大耗时(ms)": 0, "最小耗时(ms)": 0,
-                                     "循环次数": repeat, "响应体": "缺少 URL"}})
+            skip_item = {"接口": name, "结果": "⚠️ 跳过",
+                         "请求": {"method": method, "url": "", "host": "", "port": 0,
+                                  "path": "", "query": "", "headers": {}, "body": ""},
+                         "响应": {"状态码": 0, "耗时(ms)": 0, "平均耗时(ms)": 0,
+                                  "最大耗时(ms)": 0, "最小耗时(ms)": 0,
+                                  "循环次数": repeat, "响应体": "缺少 URL"}}
+            results.append(skip_item)
+            broadcast({"type": "multi_api_result", "result": skip_item,
+                       "ts": time.time()})
             continue
         # 相对路径拼上 base_url
         if url.startswith("http://") or url.startswith("https://"):
@@ -399,9 +434,12 @@ async def multi_test(payload: dict) -> dict:
             full_url = base + (url if url.startswith("/") else "/" + url)
         full_url = fill_placeholders(full_url)
         body = fill_placeholders(body) if body else ""
-        await call(name, method, full_url, body, content_type)
+        await call(name, method, full_url, body, content_type,
+                   upload_file, upload_field)
 
     passed = sum(1 for r in results if r["结果"].startswith("✅"))
+    broadcast({"type": "multi_test_done", "total": len(results),
+               "passed": passed, "ts": time.time()})
     return {"ok": True, "total": len(results), "passed": passed,
             "repeat": repeat, "results": results}
 
@@ -758,6 +796,9 @@ async def start_test(payload: dict) -> dict:
     users = int(payload.get("users", 20))
     observe = float(payload.get("observe", 300))
     mode = payload.get("mode", "full")
+    rounds = int(payload.get("rounds", 1) or 1)
+    if rounds < 1:
+        rounds = 1
     current_test_name = (payload.get("name") or "").strip()
     event_log.clear()
 
@@ -772,10 +813,32 @@ async def start_test(payload: dict) -> dict:
         cfg["apis"] = payload["apis"]
 
     engine = TestEngine(users=users, observe_seconds=observe,
-                        emit=broadcast, config=cfg, mode=mode)
+                        emit=broadcast, config=cfg, mode=mode, rounds=rounds)
     engine_task = asyncio.create_task(engine.run())
     label = "图像帧接口" if mode == "frame_only" else ("自定义接口" if payload.get("apis") else "全部接口")
     return {"ok": True, "msg": f"已启动 {users} 用户并发测试（{label}）"}
+
+
+# ---------------- 文件上传（供并发测试使用） ----------------
+
+@app.post("/api/upload-file")
+async def upload_file(file: UploadFile = File(...)) -> dict:
+    """上传一个文件到服务器，供并发测试的文件上传接口使用。"""
+    filename = file.filename or "upload.bin"
+    # 安全处理文件名
+    safe_name = re.sub(r'[^\w.\-]', '_', filename)
+    dest = UPLOAD_DIR / safe_name
+    content = await file.read()
+    dest.write_bytes(content)
+    return {"ok": True, "filename": safe_name, "size": len(content)}
+
+
+@app.get("/api/upload-files")
+async def list_upload_files() -> dict:
+    """列出已上传的文件。"""
+    files = [{"filename": f.name, "size": f.stat().st_size}
+             for f in UPLOAD_DIR.iterdir() if f.is_file()]
+    return {"ok": True, "files": files}
 
 
 @app.post("/api/stop")
@@ -871,6 +934,32 @@ async def record_imported() -> dict:
     return {"ok": True, "requests": recorded_requests}
 
 
+def _parse_multipart_fields(post_data: str) -> str:
+    """解析 multipart body，提取普通字段（非文件字段），返回 JSON 字符串。"""
+    fields = {}
+    boundary_match = re.match(r'^--([^\r\n]+)', post_data)
+    if not boundary_match:
+        return post_data
+    boundary = boundary_match[1]
+    parts = post_data.split("--" + boundary)
+    for part in parts:
+        header_end = part.find("\r\n\r\n")
+        if header_end == -1:
+            continue
+        header = part[:header_end]
+        value = part[header_end + 4:].replace("\r\n--", "").replace("\r\n", "")
+        name_match = re.search(r'name="([^"]+)"', header)
+        if not name_match:
+            continue
+        name = name_match[1]
+        filename_match = re.search(r'filename="([^"]+)"', header)
+        if filename_match:
+            # 文件字段：跳过（文件通过平台上传后下拉选择）
+            continue
+        fields[name] = value
+    return json.dumps(fields, ensure_ascii=False)
+
+
 @app.post("/api/record/import-har")
 async def record_import_har(file: UploadFile = File(...)) -> dict:
     """接收 Chrome 开发者工具导出的 HAR 文件，解析出请求列表。"""
@@ -897,6 +986,10 @@ async def record_import_har(file: UploadFile = File(...)) -> dict:
         post_data = req.get("postData", {})
         if post_data:
             body = post_data.get("text", "")
+        # multipart 请求：解析出普通字段（非文件字段）存为 JSON
+        ct = headers.get("content-type", headers.get("Content-Type", ""))
+        if method == "POST" and "multipart/form-data" in ct and body:
+            body = _parse_multipart_fields(body)
         requests.append({
             "method": method,
             "url": url,

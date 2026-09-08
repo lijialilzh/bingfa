@@ -51,14 +51,56 @@ function onDebuggerEvent(source, method, params) {
     if (/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|map)(\?|$)/i.test(url)) {
       return;
     }
-    requests.push({
+    const rec = {
       method: req.method,
       url: url,
       headers: req.headers || {},
       body: req.postData || "",
       ts: Date.now() / 1000,
-    });
+    };
+    requests.push(rec);
+
+    // multipart 请求的 postData 通常为空，尝试用 getRequestPostData 获取
+    const ct = (req.headers || {})["content-type"] || (req.headers || {})["Content-Type"] || "";
+    if (req.method === "POST" && ct.includes("multipart/form-data")) {
+      const requestId = params.requestId;
+      chrome.debugger.sendCommand(source, "Network.getRequestPostData", { requestId })
+        .then((data) => {
+          if (data && data.postData) {
+            // 解析 multipart 里的普通字段（非文件字段），存为 JSON
+            rec.body = parseMultipartFields(data.postData);
+          }
+        })
+        .catch(() => {});
+    }
   }
+}
+
+// 解析 multipart body，提取普通字段（非文件字段），返回 JSON 字符串
+function parseMultipartFields(postData) {
+  const fields = {};
+  // 按 boundary 分割
+  const boundaryMatch = postData.match(/^--([^\r\n]+)/);
+  if (!boundaryMatch) return "";
+  const boundary = boundaryMatch[1];
+  const parts = postData.split("--" + boundary);
+  for (const part of parts) {
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd === -1) continue;
+    const header = part.slice(0, headerEnd);
+    const value = part.slice(headerEnd + 4).replace(/\r\n--$/, "").replace(/\r\n$/, "");
+    // 提取 name 和 filename
+    const nameMatch = header.match(/name="([^"]+)"/);
+    if (!nameMatch) continue;
+    const name = nameMatch[1];
+    const filenameMatch = header.match(/filename="([^"]+)"/);
+    if (filenameMatch) {
+      // 文件字段：跳过（文件通过平台上传后下拉选择）
+      continue;
+    }
+    fields[name] = value;
+  }
+  return JSON.stringify(fields);
 }
 
 async function stopRecording() {

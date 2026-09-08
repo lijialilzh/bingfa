@@ -195,6 +195,7 @@
   .user-cell.loading { background: #1e3a5f; border-color: var(--cyan); }
   .user-cell.done { background: #0f2e1a; border-color: var(--green); }
   .user-cell.timeout { background: #3b2f1e; border-color: var(--yellow); }
+  .user-cell.stopped { background: #1e293b; border-color: var(--muted); }
   .user-cell.error { background: #3a1515; border-color: var(--red); }
 
   .user-cell .bar {
@@ -535,6 +536,16 @@
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
           <div class="field" style="flex:1">
+            <label>上传文件（供文件上传接口使用，如 DICOM zip）</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="file" id="multiUploadFileInput" style="flex:1">
+              <button class="btn2" onclick="uploadMultiTestFile()">上传到服务器</button>
+            </div>
+            <div class="hint" id="multiUploadFileList" style="margin-top:6px">暂无已上传文件</div>
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
             <label>接口列表（每个接口一行，按顺序执行）</label>
             <div id="multiApiList"></div>
           </div>
@@ -603,6 +614,22 @@
     </div>
     <div class="row">
       <div class="field" style="flex:1">
+        <label>上传文件（供文件上传接口使用，如 DICOM zip）</label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="file" id="uploadFileInput" style="flex:1">
+          <button class="btn2" onclick="uploadTestFile()">上传到服务器</button>
+        </div>
+        <div class="hint" id="uploadFileList" style="margin-top:6px">暂无已上传文件</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1">
+        <label>自定义接口列表（录制导入）</label>
+        <div id="customApiList" style="font-size:13px;color:var(--muted)">未导入，点「全接口测试」使用默认接口流程</div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1">
         <label>账号列表（每行一个，或范围 test2-test100，或逗号分隔）</label>
         <textarea id="cfgAccounts" placeholder="test&#10;test2-test100"></textarea>
         <div class="hint">当前账号数：<span id="cfgCount">0</span></div>
@@ -620,6 +647,8 @@
     <input id="users" type="number" value="20" min="1" max="100">
     <label>图像加载超时上限(秒)</label>
     <input id="observe" type="number" value="300" min="10" max="300">
+    <label>循环次数</label>
+    <input id="rounds" type="number" value="1" min="1" max="100" style="width:70px">
     <button id="btnStartFull" onclick="startTest('full')">全接口测试</button>
     <button id="btnStartFrame" onclick="startTest('frame_only')">图像加载测试</button>
     <button class="btn2" onclick="saveModule('concurrency')">保存至历史记录</button>
@@ -632,15 +661,15 @@
   <div class="stats">
     <div class="stat"><div class="num" id="sTotal">0</div><div class="lbl">总用户</div></div>
     <div class="stat"><div class="num green" id="sLogin">0</div><div class="lbl">登录成功</div></div>
-    <div class="stat"><div class="num cyan" id="sViewer">0</div><div class="lbl">进入阅片</div></div>
-    <div class="stat"><div class="num yellow" id="sLoading">0</div><div class="lbl">加载中</div></div>
-    <div class="stat"><div class="num" id="sDone">0</div><div class="lbl">加载完成</div></div>
+    <div class="stat"><div class="num cyan" id="sViewer">0</div><div class="lbl" id="lblViewer">进入阅片</div></div>
+    <div class="stat"><div class="num yellow" id="sLoading">0</div><div class="lbl" id="lblLoading">加载中</div></div>
+    <div class="stat"><div class="num" id="sDone">0</div><div class="lbl" id="lblDone">加载完成</div></div>
     <div class="stat"><div class="num yellow" id="sTimeout">0</div><div class="lbl">超时未完成</div></div>
     <div class="stat"><div class="num red" id="sError">0</div><div class="lbl">出错</div></div>
     <div class="stat"><div class="num" id="sAvgLogin">-</div><div class="lbl">平均登录(ms)</div></div>
-    <div class="stat"><div class="num" id="sAvgViewer">-</div><div class="lbl">平均阅片页(ms)</div></div>
-    <div class="stat"><div class="num" id="sAvgAll">-</div><div class="lbl">平均整套图像加载(ms)</div></div>
-    <div class="stat"><div class="num" id="sFrames">0</div><div class="lbl">图像帧请求总数</div></div>
+    <div class="stat"><div class="num" id="sAvgViewer">-</div><div class="lbl" id="lblAvgViewer">平均阅片页(ms)</div></div>
+    <div class="stat"><div class="num" id="sAvgAll">-</div><div class="lbl" id="lblAvgAll">平均整套图像加载(ms)</div></div>
+    <div class="stat"><div class="num" id="sFrames">0</div><div class="lbl" id="lblFrames">图像帧请求总数</div></div>
   </div>
 
   <div class="grid-wrap">
@@ -686,7 +715,7 @@
     <!-- ============ 录制 ============ -->
     <div class="tab-page" id="tab-record">
       <h1>录制</h1>
-      <div class="sub">方式一：服务器直接录制（浏览器在服务器上弹出）；方式二：Chrome 扩展录制（浏览器在你电脑上弹出）</div>
+      <div class="sub">方式一：服务器直接录制（浏览器弹在服务器屏幕上）；方式二/三：在你自己的电脑上录制（远程访问时用）</div>
       <div class="api-test-form">
         <div class="row">
           <div class="field" style="flex:1">
@@ -719,9 +748,17 @@
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
           <div class="field" style="flex:1">
-            <label>方式二：Chrome 扩展录制（Windows 电脑远程访问时用）</label>
+            <label>⚠️ 注意：方式一浏览器弹在「服务器」屏幕上，远程访问（Mac/Windows）看不到</label>
+            <div class="hint" style="line-height:1.8;color:var(--yellow)">
+              如果你是用 Mac/Windows 电脑远程访问本平台，请用下面的「方式二」或「方式三」，浏览器才会弹在你自己的电脑上。
+            </div>
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>方式二：Chrome 扩展录制（浏览器弹在你自己的电脑上）</label>
             <div class="hint" style="line-height:1.8">
-              1. 下载 <code>chrome-extension</code> 文件夹到你的 Windows 电脑<br>
+              1. 下载 <code>chrome-extension</code> 文件夹到你的电脑（Windows/Mac 均可）<br>
               2. Chrome 打开 <code>chrome://extensions</code>，开启「开发者模式」<br>
               3. 点「加载已解压的扩展程序」，选择 <code>chrome-extension</code> 文件夹<br>
               4. 打开被测系统页面，点扩展图标，填服务器地址 <code id="recordServerHint"></code>，点「开始录制」<br>
@@ -918,6 +955,7 @@ function initAfterLogin() {
   const hint = document.getElementById("recordServerHint");
   if (hint) hint.textContent = location.origin;
   loadRecordedRequests();
+  loadUploadFiles();
 }
 
 // 页面加载时：有 token 则尝试直接进入，否则显示登录框
@@ -1045,7 +1083,8 @@ function collectConcurrency() {
     accounts_text: document.getElementById("cfgAccounts").value,
     users: document.getElementById("users").value,
     observe: document.getElementById("observe").value,
-    custom_apis: window.customApis || null,
+    rounds: document.getElementById("rounds").value,
+    custom_apis: collectCustomApis(),
   };
 }
 
@@ -1060,7 +1099,9 @@ function applyConcurrency(d) {
   document.getElementById("cfgAccounts").value = d.accounts_text || "";
   document.getElementById("users").value = d.users || 20;
   document.getElementById("observe").value = d.observe || 300;
+  document.getElementById("rounds").value = d.rounds || 1;
   window.customApis = d.custom_apis || null;
+  renderCustomApiList();
   // 更新账号数显示
   const accounts = (d.accounts_text || "").split("\n").filter(s => s.trim());
   document.getElementById("cfgCount").textContent = accounts.length;
@@ -1662,8 +1703,141 @@ function importRecordedToConcurrency() {
   if (!apis.length) { alert("没有可导入的 API 请求"); return; }
   // 保存到全局，供并发测试使用
   window.customApis = apis;
+  renderCustomApiList();
   switchTab("concurrency");
-  alert(`已导入 ${apis.length} 个接口到并发测试，点击「全接口测试」即可按此列表压测`);
+  showToast(`已导入 ${apis.length} 个接口到并发测试`);
+}
+
+// 渲染自定义接口列表（可编辑）
+function renderCustomApiList() {
+  const el = document.getElementById("customApiList");
+  if (!el) return;
+  const apis = window.customApis || [];
+  if (!apis.length) {
+    el.innerHTML = `<div style="color:var(--muted)">未导入，点「全接口测试」使用默认接口流程</div>`;
+    return;
+  }
+  const uploadFiles = window._uploadFiles || [];
+  let html = `<div style="margin-bottom:8px">共 <b>${apis.length}</b> 个接口，可编辑后点「全接口测试」按此列表循环压测：</div>`;
+  apis.forEach((a, i) => {
+    const ctypeOptions = ["application/json", "application/x-www-form-urlencoded",
+                          "text/plain", "application/xml", "text/xml"]
+      .map(ct => `<option ${(a.content_type || "application/json") === ct ? "selected" : ""}>${ct}</option>`).join("");
+    const fileOptions = ['<option value="">— 无文件 —</option>']
+      .concat(uploadFiles.map(f => {
+        const sel = (a.upload_file || "") === f.filename ? " selected" : "";
+        return `<option value="${escapeHtml(f.filename)}"${sel}>${escapeHtml(f.filename)}</option>`;
+      }))
+      .join("");
+    html += `<div class="api-row" data-idx="${i}">
+      <input class="api-name" placeholder="名称" value="${escapeHtml(a.name || "")}">
+      <select class="api-method">
+        <option ${a.method === "POST" ? "selected" : ""}>GET</option>
+        <option ${a.method === "POST" ? "selected" : ""}>POST</option>
+      </select>
+      <input class="api-url" placeholder="URL，支持 {study_uid} {series_uid} {account} {password_hash}" value="${escapeHtml(a.url || "")}">
+      <select class="api-ctype">${ctypeOptions}</select>
+      <input class="api-body" placeholder="请求体(可选)" value="${escapeHtml(a.body || "")}">
+      <select class="api-file" title="文件上传接口选择文件">${fileOptions}</select>
+      <button class="api-del" onclick="removeCustomApi(${i})">删除</button>
+    </div>`;
+  });
+  html += `<button class="btn2" onclick="addCustomApi()" style="margin-top:8px">+ 添加接口</button>`;
+  el.innerHTML = html;
+}
+
+// 添加一个自定义接口
+function addCustomApi() {
+  if (!window.customApis) window.customApis = [];
+  window.customApis.push({ name: "", method: "GET", url: "", body: "", content_type: "application/json" });
+  renderCustomApiList();
+}
+
+// 删除一个自定义接口
+function removeCustomApi(idx) {
+  if (!window.customApis) return;
+  window.customApis.splice(idx, 1);
+  renderCustomApiList();
+}
+
+// 从编辑后的表单收集自定义接口列表
+function collectCustomApis() {
+  const apis = [];
+  document.querySelectorAll("#customApiList .api-row").forEach(row => {
+    const name = row.querySelector(".api-name").value.trim();
+    const method = row.querySelector(".api-method").value;
+    const url = row.querySelector(".api-url").value.trim();
+    const body = row.querySelector(".api-body").value.trim();
+    const content_type = row.querySelector(".api-ctype").value;
+    const upload_file = row.querySelector(".api-file").value;
+    if (url) apis.push({ name: name || url, method, url, body, content_type, upload_file });
+  });
+  return apis;
+}
+
+// 上传测试文件到服务器
+async function uploadTestFile() {
+  const fileInput = document.getElementById("uploadFileInput");
+  const file = fileInput.files[0];
+  if (!file) { showToast("请先选择文件", true); return; }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await apiFetch("/api/upload-file", {
+      method: "POST", body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.msg, true); return; }
+    showToast(`文件已上传：${data.filename}`);
+    fileInput.value = "";
+    loadUploadFiles();
+  } catch (e) {
+    showToast("上传失败：" + e, true);
+  }
+}
+
+// 加载已上传的文件列表
+async function loadUploadFiles() {
+  try {
+    const res = await apiFetch("/api/upload-files");
+    const data = await res.json();
+    if (data.ok) {
+      window._uploadFiles = data.files || [];
+      const el = document.getElementById("uploadFileList");
+      if (el) {
+        el.textContent = window._uploadFiles.length
+          ? window._uploadFiles.map(f => `${f.filename} (${Math.round(f.size/1024)}KB)`).join("，")
+          : "暂无已上传文件";
+      }
+      const multiEl = document.getElementById("multiUploadFileList");
+      if (multiEl) {
+        multiEl.textContent = window._uploadFiles.length
+          ? window._uploadFiles.map(f => `${f.filename} (${Math.round(f.size/1024)}KB)`).join("，")
+          : "暂无已上传文件";
+      }
+      renderCustomApiList();
+      // 刷新多接口测试的接口列表（保留用户已填内容，更新文件下拉框）
+      refreshMultiApiFileOptions();
+    }
+  } catch (e) {}
+}
+
+// 刷新多接口测试接口行的文件下拉框（保留已填内容）
+function refreshMultiApiFileOptions() {
+  const rows = document.querySelectorAll("#multiApiList .api-row");
+  if (!rows.length) return;
+  const uploadFiles = window._uploadFiles || [];
+  const fileOptions = ['<option value="">— 无文件 —</option>']
+    .concat(uploadFiles.map(f => `<option value="${escapeHtml(f.filename)}">${escapeHtml(f.filename)}</option>`))
+    .join("");
+  rows.forEach(row => {
+    const fileSel = row.querySelector(".api-file");
+    if (fileSel) {
+      const cur = fileSel.value;
+      fileSel.innerHTML = fileOptions;
+      if (cur) fileSel.value = cur;
+    }
+  });
 }
 
 // ---- 单接口测试 ----
@@ -1858,6 +2032,13 @@ function addApiRow(api) {
   const ctypeOptions = ["application/json", "application/x-www-form-urlencoded",
                         "text/plain", "application/xml", "text/xml"]
     .map(ct => `<option ${api.content_type === ct ? "selected" : ""}>${ct}</option>`).join("");
+  const uploadFiles = window._uploadFiles || [];
+  const fileOptions = ['<option value="">— 无文件 —</option>']
+    .concat(uploadFiles.map(f => {
+      const sel = (api.upload_file || "") === f.filename ? " selected" : "";
+      return `<option value="${escapeHtml(f.filename)}"${sel}>${escapeHtml(f.filename)}</option>`;
+    }))
+    .join("");
   row.innerHTML = `
     <input class="api-name" placeholder="名称" value="${escapeHtml(api.name || "")}">
     <select class="api-method">
@@ -1867,6 +2048,7 @@ function addApiRow(api) {
     <input class="api-url" placeholder="URL，如 /api/v1/user/login，支持 {study_uid} {series_uid} {account} {password_hash}" value="${escapeHtml(api.url || "")}">
     <select class="api-ctype" onchange="onApiCtypeChange(this)">${ctypeOptions}</select>
     <input class="api-body" placeholder="请求体(可选)" value="${escapeHtml(api.body || "")}">
+    <select class="api-file" title="文件上传接口选择文件">${fileOptions}</select>
     <button class="api-del" onclick="this.parentElement.remove()">删除</button>`;
   list.appendChild(row);
 }
@@ -1894,9 +2076,31 @@ function collectApis() {
     const url = row.querySelector(".api-url").value.trim();
     const body = row.querySelector(".api-body").value.trim();
     const content_type = row.querySelector(".api-ctype").value;
-    if (url) apis.push({ name: name || url, method, url, body, content_type });
+    const upload_file = row.querySelector(".api-file").value;
+    if (url) apis.push({ name: name || url, method, url, body, content_type, upload_file });
   });
   return apis;
+}
+
+// 上传多接口测试文件到服务器
+async function uploadMultiTestFile() {
+  const fileInput = document.getElementById("multiUploadFileInput");
+  const file = fileInput.files[0];
+  if (!file) { showToast("请先选择文件", true); return; }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const res = await apiFetch("/api/upload-file", {
+      method: "POST", body: formData
+    });
+    const data = await res.json();
+    if (!data.ok) { showToast(data.msg, true); return; }
+    showToast(`文件已上传：${data.filename}`);
+    fileInput.value = "";
+    loadUploadFiles();
+  } catch (e) {
+    showToast("上传失败：" + e, true);
+  }
 }
 
 async function runMultiTest() {
@@ -1904,6 +2108,7 @@ async function runMultiTest() {
   const logEl = document.getElementById("multiLog");
   statusEl.textContent = "测试中…";
   logEl.innerHTML = "";
+  window._multiResults = [];
   const apis = collectApis();
   if (!apis.length) { alert("请至少添加一个接口"); return; }
   const payload = {
@@ -1922,9 +2127,13 @@ async function runMultiTest() {
       body: JSON.stringify(payload)
     });
     const data = await res.json();
+    // 若 WebSocket 事件没更新（如连接断开），用最终结果兜底
+    if (!window._multiResults || !window._multiResults.length) {
+      window._multiResults = data.results || [];
+      renderMultiLog(data);
+      renderMultiAggregate(data);
+    }
     statusEl.textContent = `完成：${data.passed}/${data.total} 个接口通过`;
-    renderMultiLog(data);
-    renderMultiAggregate(data);
   } catch (e) {
     statusEl.textContent = "测试失败";
     addMultiLog("err", `✗ 测试失败：${e}`);
@@ -1969,7 +2178,7 @@ function renderMultiAggregate(data) {
   for (const r of results) {
     const req = r.请求 || {};
     const resp = r.响应 || {};
-    const ok = (resp.状态码 || 0) < 400;
+    const ok = r.结果 === "✅ 通过";
     const statusColor = ok ? "var(--green)" : "var(--red)";
     const times = resp["每次耗时(ms)"] || [];
     const timesHtml = times.length
@@ -2015,13 +2224,16 @@ function renderMultiLog(data) {
   for (const r of data.results || []) {
     const req = r.请求 || {};
     const resp = r.响应 || {};
-    const ok = (resp.状态码 || 0) < 400;
+    const ok = r.结果 === "✅ 通过";
     addMultiLog("info", "");
     addMultiLog("info", `━━━ ${r.接口} ━━━ ${r.结果}`);
     addMultiLog("req", `→ ${req.method || ""} ${req.url || ""}`);
     addMultiLog("info", `→ 主机：${req.host || ""}  端口：${req.port || ""}  路径：${req.path || ""}${req.query ? "?" + req.query : ""}`);
     if (req.body) addMultiLog("info", `→ 请求体：${req.body}`);
     addMultiLog(ok ? "resp" : "err", `← HTTP ${resp.状态码 ?? ""} · 平均 ${resp["平均耗时(ms)"] ?? ""} ms · 最大 ${resp["最大耗时(ms)"] ?? ""} ms · 最小 ${resp["最小耗时(ms)"] ?? ""} ms · ${resp.大小 ?? ""} 字节`);
+    if (resp.业务错误) {
+      addMultiLog("err", `✗ 业务错误：${resp.业务错误}`);
+    }
     const bodyText = formatBody(resp.响应体);
     if (bodyText) {
       addMultiLog("info", `← 响应体：`);
@@ -2034,6 +2246,29 @@ function renderMultiLog(data) {
   addMultiLog("info", `✅ 测试完成：${data.passed}/${data.total} 个接口通过`);
 }
 
+// 渲染单个多接口结果（实时推送时用）
+function renderMultiSingleResult(r) {
+  const req = r.请求 || {};
+  const resp = r.响应 || {};
+  const ok = r.结果 === "✅ 通过";
+  addMultiLog("info", "");
+  addMultiLog("info", `━━━ ${r.接口} ━━━ ${r.结果}`);
+  addMultiLog("req", `→ ${req.method || ""} ${req.url || ""}`);
+  addMultiLog("info", `→ 主机：${req.host || ""}  端口：${req.port || ""}  路径：${req.path || ""}${req.query ? "?" + req.query : ""}`);
+  if (req.body) addMultiLog("info", `→ 请求体：${req.body}`);
+  addMultiLog(ok ? "resp" : "err", `← HTTP ${resp.状态码 ?? ""} · 平均 ${resp["平均耗时(ms)"] ?? ""} ms · 最大 ${resp["最大耗时(ms)"] ?? ""} ms · 最小 ${resp["最小耗时(ms)"] ?? ""} ms · ${resp.大小 ?? ""} 字节`);
+  if (resp.业务错误) {
+    addMultiLog("err", `✗ 业务错误：${resp.业务错误}`);
+  }
+  const bodyText = formatBody(resp.响应体);
+  if (bodyText) {
+    addMultiLog("info", `← 响应体：`);
+    for (const line of bodyText.split("\n")) {
+      addMultiLog("resp", `    ${line}`);
+    }
+  }
+}
+
 function connect() {
   if (!authToken) return;
   ws = new WebSocket(`ws://${location.host}/ws?token=${encodeURIComponent(authToken)}`);
@@ -2044,18 +2279,23 @@ function connect() {
 function handleEvent(ev) {
   if (ev.type === "start") {
     const totalFrames = ev.total_frames || 0;
+    const mode = ev.mode || "full";
+    window._testMode = mode;  // 记录当前测试模式
     users = ev.accounts.map((a, i) => ({
       id: i, account: a, status: "pending", login_ms: 0, viewer_ms: 0,
       first_frame_ms: 0, all_frames_ms: 0, frames: 0,
-      total_frames: totalFrames, error: ""
+      total_frames: totalFrames, round: 0, total_rounds: 0, error: ""
     }));
     framesTotal = 0;
     logCount = 0;
     document.getElementById("log").innerHTML = "";
     document.getElementById("summaryBody").innerHTML = "";
     renderUsers();
-    addLog("info", `测试启动：${ev.users} 个用户` +
+    const modeText = mode === "frame_only" ? "图像加载测试" : (mode === "custom" ? "自定义接口测试" : "全接口测试");
+    addLog("info", `测试启动：${ev.users} 个用户（${modeText}）` +
       (totalFrames ? `，共 ${totalFrames} 帧` : ""));
+    // 根据模式更新统计标签文案
+    updateStatLabels(mode);
     setRunning(true);
   }
   else if (ev.type === "progress") {
@@ -2077,6 +2317,19 @@ function handleEvent(ev) {
     const u = users[ev.user_id];
     if (u) { u.total_frames = ev.total_frames; renderUsers(); }
   }
+  else if (ev.type === "round_start") {
+    // 循环轮次开始：重置该用户的帧计数，进度从 0 开始
+    const u = users[ev.user_id];
+    if (u) {
+      u.round = ev.round;
+      u.total_rounds = ev.total_rounds;
+      u.frames = 0;
+      renderUsers();
+    }
+    if (ev.total_rounds > 1) {
+      addLog("info", `[${ev.account}] 第 ${ev.round}/${ev.total_rounds} 轮开始`);
+    }
+  }
   else if (ev.type === "user_done") {
     const u = users[ev.user_id];
     if (u) {
@@ -2088,7 +2341,20 @@ function handleEvent(ev) {
     }
   }
   else if (ev.type === "request") {
-    if (ev.tag === "图像帧") {
+    const mode = window._testMode || "full";
+    if (mode === "custom") {
+      // 自定义接口模式：统计所有请求次数
+      framesTotal += 1;
+      const u = users[ev.user_id];
+      if (u) {
+        u.frames += 1;
+        u.status = "loading";
+        if (!u._lastRender || Date.now() - u._lastRender > 200) {
+          u._lastRender = Date.now();
+          renderUsers();
+        }
+      }
+    } else if (ev.tag === "图像帧") {
       framesTotal += 1;
       const u = users[ev.user_id];
       if (u) {
@@ -2121,6 +2387,21 @@ function handleEvent(ev) {
     addRecordLog("req", `${ev.method} ${ev.url}`);
     const statusEl = document.getElementById("recordStatus");
     if (statusEl) statusEl.textContent = `已捕获 ${recordedRequests.length} 个请求`;
+  }
+  else if (ev.type === "multi_api_result") {
+    // 多接口测试：单个接口执行完成，实时显示
+    if (!window._multiResults) window._multiResults = [];
+    window._multiResults.push(ev.result);
+    renderMultiSingleResult(ev.result);
+    const statusEl = document.getElementById("multiStatus");
+    if (statusEl) statusEl.textContent = `测试中…（已完成 ${window._multiResults.length} 个）`;
+  }
+  else if (ev.type === "multi_test_done") {
+    // 多接口测试：全部完成
+    const statusEl = document.getElementById("multiStatus");
+    if (statusEl) statusEl.textContent = `完成：${ev.passed}/${ev.total} 个接口通过`;
+    addMultiLog("info", "");
+    addMultiLog("info", `✅ 测试完成：${ev.passed}/${ev.total} 个接口通过`);
   }
   else if (ev.type === "ui_case_start") {
     // UI 测试：某条用例开始执行
@@ -2287,33 +2568,72 @@ function addLog(cls, text, tag) {
 function renderUsers() {
   const grid = document.getElementById("usersGrid");
   grid.innerHTML = "";
+  const mode = window._testMode || "full";
+  const isCustom = mode === "custom";
   const statusText = { pending: "等待", login: "登录中", viewer: "进入阅片",
-    loading: "加载图像", done: "完成", timeout: "超时未完成", error: "出错" };
+    loading: isCustom ? "执行中" : "加载图像", done: "完成", timeout: "超时未完成",
+    stopped: "已停止", error: "出错" };
   for (const u of users) {
     const cell = document.createElement("div");
     cell.className = "user-cell " + u.status;
 
-    // 图像加载进度条
+    // 进度条：自定义接口模式显示请求次数，图像模式显示帧进度
     let progress = "";
     if (u.status === "loading" || u.status === "done" || u.status === "timeout") {
-      const total = u.total_frames || 0;
-      const pct = total > 0 ? Math.min(100, Math.round(u.frames / total * 100)) : 0;
-      progress = `
-        <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
-        <div class="st">${u.frames}/${total || "?"} 帧 (${pct}%)</div>`;
+      if (isCustom) {
+        progress = `<div class="st">已请求 ${u.frames} 次</div>`;
+      } else {
+        const total = u.total_frames || 0;
+        const pct = total > 0 ? Math.min(100, Math.round(u.frames / total * 100)) : 0;
+        progress = `
+          <div class="bar"><div class="bar-fill" style="width:${pct}%"></div></div>
+          <div class="st">${u.frames}/${total || "?"} 帧 (${pct}%)</div>`;
+      }
     }
 
-    // 阶段耗时（按时间先后顺序：登录 → 页面 → 图像）
+    // 阶段耗时（按时间先后顺序：登录 → 页面 → 图像/总耗时）
     let timing = "";
     if (u.login_ms > 0) timing += `<div class="st">登录 ${Math.round(u.login_ms)}ms</div>`;
     if (u.viewer_ms > 0) timing += `<div class="st">页面 ${Math.round(u.viewer_ms)}ms</div>`;
-    if (u.all_frames_ms > 0) timing += `<div class="st">图像 ${Math.round(u.all_frames_ms)}ms</div>`;
+    if (u.all_frames_ms > 0) {
+      timing += isCustom
+        ? `<div class="st">总耗时 ${Math.round(u.all_frames_ms)}ms</div>`
+        : `<div class="st">图像 ${Math.round(u.all_frames_ms)}ms</div>`;
+    }
+    // 轮次信息
+    if (u.total_rounds > 1) {
+      timing += `<div class="st">第 ${u.round || 0}/${u.total_rounds} 轮</div>`;
+    }
 
     // 显示顺序：账号 → 已完成阶段耗时 → 当前状态 → 进度条
     cell.innerHTML = `<div class="acct">${u.account}</div>
       ${timing}
       <div class="st">${statusText[u.status] || u.status}</div>${progress}`;
     grid.appendChild(cell);
+  }
+}
+
+// 根据测试模式更新统计标签文案
+function updateStatLabels(mode) {
+  const isCustom = mode === "custom";
+  const set = (id, text) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  };
+  if (isCustom) {
+    set("lblViewer", "开始执行");
+    set("lblLoading", "执行中");
+    set("lblDone", "执行完成");
+    set("lblAvgViewer", "平均开始耗时(ms)");
+    set("lblAvgAll", "平均总耗时(ms)");
+    set("lblFrames", "请求总数");
+  } else {
+    set("lblViewer", "进入阅片");
+    set("lblLoading", "加载中");
+    set("lblDone", "加载完成");
+    set("lblAvgViewer", "平均阅片页(ms)");
+    set("lblAvgAll", "平均整套图像加载(ms)");
+    set("lblFrames", "图像帧请求总数");
   }
 }
 
@@ -2471,15 +2791,18 @@ async function saveConfig() {
 async function startTest(mode) {
   const users = parseInt(document.getElementById("users").value) || 20;
   const observe = parseFloat(document.getElementById("observe").value) || 300;
+  const rounds = parseInt(document.getElementById("rounds").value) || 1;
   // 先保存当前表单配置，再启动
   await saveConfig();
   const payload = {
-    users, observe, mode,
+    users, observe, rounds, mode,
     name: document.getElementById("cfgName").value.trim(),
   };
-  // 如果录制导入了自定义接口，一并传给后端
-  if (window.customApis && window.customApis.length) {
-    payload.apis = window.customApis;
+  // 从编辑后的自定义接口列表收集（支持用户编辑）
+  const editedApis = collectCustomApis();
+  if (editedApis.length) {
+    payload.apis = editedApis;
+    window.customApis = editedApis;
   }
   const res = await apiFetch("/api/start", {
     method: "POST", headers: { "Content-Type": "application/json" },
