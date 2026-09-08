@@ -19,13 +19,20 @@ from typing import Optional, Set, List, Dict
 
 import httpx
 from fastapi import FastAPI, UploadFile, File, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from engine import TestEngine, DEFAULT_CONFIG, parse_accounts, to_password_hash
 from record import Recorder
 from ui_test import UITestRunner, parse_excel_cases
+from vnc_recorder import VNCRecorder
 
 app = FastAPI(title="测试平台")
+
+# noVNC 静态文件（网页端显示浏览器画面）
+NOVNC_DIR = Path(__file__).parent / "novnc"
+if NOVNC_DIR.exists():
+    app.mount("/novnc", StaticFiles(directory=str(NOVNC_DIR)), name="novnc")
 
 # ---- 登录认证 ----
 # 默认账号：master / Tuixiang2026
@@ -49,6 +56,10 @@ current_test_name: str = ""         # 当前并发测试的名称
 recorder: Optional[Recorder] = None
 recorder_task: Optional[asyncio.Task] = None
 recorded_requests: List[dict] = []
+
+# VNC 录制状态（网页内嵌浏览器）
+vnc_recorder: Optional[VNCRecorder] = None
+vnc_task: Optional[asyncio.Task] = None
 
 # UI 自动化测试状态
 ui_runner: Optional[UITestRunner] = None
@@ -126,8 +137,9 @@ def _check_token(token: str) -> bool:
 async def auth_middleware(request: Request, call_next):
     """认证中间件：除登录接口和静态资源外，所有请求需携带有效 token。"""
     path = request.url.path
-    # 放行登录接口和根路径（根路径返回登录页）
-    if path in ("/api/login", "/api/logout", "/") or path.startswith("/static"):
+    # 放行登录接口、根路径、noVNC 静态文件（iframe 无法带 token）
+    if path in ("/api/login", "/api/logout", "/") or path.startswith("/static") \
+            or path.startswith("/novnc"):
         return await call_next(request)
     # 检查 token（支持 header 或 query 参数）
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
@@ -887,6 +899,51 @@ async def record_start(payload: dict) -> dict:
                      account=account, password=password,
                      login_api_path=login_api_path))
     return {"ok": True, "msg": "录制已启动，请在浏览器中操作"}
+
+
+# ---------------- VNC 录制（网页内嵌浏览器） ----------------
+
+@app.post("/api/record/vnc/start")
+async def record_vnc_start(payload: dict) -> dict:
+    """启动 VNC 录制：服务器虚拟显示 + 浏览器，网页通过 noVNC 看到并操作。"""
+    global vnc_recorder, vnc_task, recorded_requests
+    if vnc_task and not vnc_task.done():
+        return {"ok": False, "msg": "录制已在进行中"}
+    url = (payload.get("url") or "").strip()
+    if not url:
+        return {"ok": False, "msg": "缺少 url"}
+    login_first = bool(payload.get("login_first"))
+    cfg = load_config()
+    base_url = (payload.get("base_url") or cfg.get("base_url") or "").strip()
+    account = (payload.get("account") or "").strip() or "test"
+    password = payload.get("password") or cfg.get("password") or "123qwe"
+    login_api_path = cfg.get("login_api_path", "/api/v1/user/login")
+    recorded_requests = []
+    vnc_recorder = VNCRecorder(emit=broadcast)
+    vnc_task = asyncio.create_task(
+        vnc_recorder.run(url, login_first=login_first, base_url=base_url,
+                         account=account, password=password,
+                         login_api_path=login_api_path))
+    return {"ok": True, "msg": "VNC 录制已启动",
+            "ws_port": vnc_recorder.ws_port}
+
+
+@app.post("/api/record/vnc/stop")
+async def record_vnc_stop() -> dict:
+    """停止 VNC 录制，返回捕获的请求列表。"""
+    global vnc_recorder, vnc_task, recorded_requests
+    if not vnc_recorder:
+        return {"ok": False, "msg": "尚未开始录制"}
+    vnc_recorder.stop()
+    if vnc_task:
+        try:
+            recorded_requests = await asyncio.wait_for(vnc_task, timeout=30)
+        except Exception:
+            recorded_requests = vnc_recorder.requests
+    vnc_recorder = None
+    vnc_task = None
+    return {"ok": True, "count": len(recorded_requests),
+            "requests": recorded_requests}
 
 
 @app.post("/api/record/stop")

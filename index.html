@@ -715,7 +715,7 @@
     <!-- ============ 录制 ============ -->
     <div class="tab-page" id="tab-record">
       <h1>录制</h1>
-      <div class="sub">方式一：服务器直接录制（浏览器弹在服务器屏幕上）；方式二/三：在你自己的电脑上录制（远程访问时用）</div>
+      <div class="sub">方式一：网页内嵌浏览器（推荐，任何设备都能用）；方式二：服务器直接录制；方式三/四：在你自己的电脑上录制</div>
       <div class="api-test-form">
         <div class="row">
           <div class="field" style="flex:1">
@@ -740,6 +740,8 @@
           </div>
         </div>
         <div class="row">
+          <button id="btnVncStart" onclick="startVncRecord()">开始录制（网页内嵌浏览器）</button>
+          <button id="btnVncStop" class="stop" onclick="stopVncRecord()" disabled>停止录制</button>
           <button id="btnRecordStart" onclick="startRecord()">开始录制（服务器）</button>
           <button id="btnRecordStop" class="stop" onclick="stopRecord()" disabled>停止录制</button>
           <button class="btn2" onclick="importRecorded()">导入到多接口测试</button>
@@ -748,15 +750,16 @@
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
           <div class="field" style="flex:1">
-            <label>⚠️ 注意：方式一浏览器弹在「服务器」屏幕上，远程访问（Mac/Windows）看不到</label>
-            <div class="hint" style="line-height:1.8;color:var(--yellow)">
-              如果你是用 Mac/Windows 电脑远程访问本平台，请用下面的「方式二」或「方式三」，浏览器才会弹在你自己的电脑上。
+            <label>浏览器画面（方式一：网页内嵌浏览器，直接在这里操作）</label>
+            <div id="vncContainer" style="display:none;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:#000">
+              <iframe id="vncFrame" style="width:100%;height:600px;border:none" allow="clipboard-read; clipboard-write"></iframe>
             </div>
+            <div class="hint" id="vncHint" style="margin-top:6px">点击「开始录制（网页内嵌浏览器）」后，浏览器画面会显示在这里，可直接操作</div>
           </div>
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
           <div class="field" style="flex:1">
-            <label>方式二：Chrome 扩展录制（浏览器弹在你自己的电脑上）</label>
+            <label>方式三：Chrome 扩展录制（浏览器弹在你自己的电脑上）</label>
             <div class="hint" style="line-height:1.8">
               1. 下载 <code>chrome-extension</code> 文件夹到你的电脑（Windows/Mac 均可）<br>
               2. Chrome 打开 <code>chrome://extensions</code>，开启「开发者模式」<br>
@@ -768,7 +771,7 @@
         </div>
         <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
           <div class="field" style="flex:1">
-            <label>方式三：Chrome 开发者工具导出 HAR 文件（最简单，零安装）</label>
+            <label>方式四：Chrome 开发者工具导出 HAR 文件（零安装）</label>
             <div class="hint" style="line-height:1.8">
               1. 在 Chrome 里打开被测系统页面，按 <code>F12</code> 打开开发者工具<br>
               2. 切到「Network（网络）」标签，勾选「Preserve log（保留日志）」<br>
@@ -1613,6 +1616,51 @@ async function stopRecord() {
   recordedRequests = data.requests || [];
   document.getElementById("btnRecordStart").disabled = false;
   document.getElementById("btnRecordStop").disabled = true;
+  document.getElementById("recordStatus").textContent = `已停止，捕获 ${data.count} 个请求`;
+  addRecordLog("info", `录制结束，共捕获 ${data.count} 个请求`);
+  for (const r of recordedRequests) {
+    addRecordLog("req", `${r.method} ${r.url}`);
+  }
+}
+
+// VNC 录制：网页内嵌浏览器
+async function startVncRecord() {
+  const url = document.getElementById("recordUrl").value.trim();
+  if (!url) { showToast("请输入起始 URL", true); return; }
+  const loginFirst = document.getElementById("recordLoginFirst").checked;
+  const account = document.getElementById("recordAccount").value.trim();
+  const password = document.getElementById("recordPassword").value;
+  const res = await apiFetch("/api/record/vnc/start", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, login_first: loginFirst, account, password })
+  });
+  const data = await res.json();
+  if (!data.ok) { showToast(data.msg, true); return; }
+  document.getElementById("recordLog").innerHTML = "";
+  addRecordLog("info", `VNC 录制已启动，请在下方浏览器画面中操作（起始页：${url}）`);
+  document.getElementById("btnVncStart").disabled = true;
+  document.getElementById("btnVncStop").disabled = false;
+  document.getElementById("recordStatus").textContent = "录制中…";
+  // 显示 noVNC 画面
+  const wsPort = data.ws_port || 6080;
+  const vncUrl = `/novnc/vnc_lite.html?host=${location.hostname}&port=${wsPort}&autoconnect=true&resize=scale`;
+  const frame = document.getElementById("vncFrame");
+  frame.src = vncUrl;
+  document.getElementById("vncContainer").style.display = "block";
+  document.getElementById("vncHint").textContent = "浏览器画面已加载，直接在上方操作，完成后点「停止录制」";
+}
+
+// VNC 录制：停止
+async function stopVncRecord() {
+  const res = await apiFetch("/api/record/vnc/stop", { method: "POST" });
+  const data = await res.json();
+  if (!data.ok) { showToast(data.msg, true); return; }
+  recordedRequests = data.requests || [];
+  document.getElementById("btnVncStart").disabled = false;
+  document.getElementById("btnVncStop").disabled = true;
+  document.getElementById("vncContainer").style.display = "none";
+  document.getElementById("vncFrame").src = "about:blank";
+  document.getElementById("vncHint").textContent = "点击「开始录制（网页内嵌浏览器）」后，浏览器画面会显示在这里，可直接操作";
   document.getElementById("recordStatus").textContent = `已停止，捕获 ${data.count} 个请求`;
   addRecordLog("info", `录制结束，共捕获 ${data.count} 个请求`);
   for (const r of recordedRequests) {
