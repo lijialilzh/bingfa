@@ -912,6 +912,18 @@ async def record_vnc_start(payload: dict) -> dict:
     url = (payload.get("url") or "").strip()
     if not url:
         return {"ok": False, "msg": "缺少 url"}
+    # 检查 VNC 依赖（仅 Linux 服务器支持）
+    import shutil
+    missing = []
+    for cmd, name in (("Xvfb", "xvfb"), ("x11vnc", "x11vnc"),
+                      ("websockify", "websockify")):
+        if shutil.which(cmd) is None:
+            missing.append(name)
+    if missing:
+        return {"ok": False,
+                "msg": f"服务器缺少 VNC 依赖（{', '.join(missing)}），"
+                       f"请在服务器上执行 ./install_vnc.sh 安装。"
+                       f"注意：此功能仅 Linux 服务器支持，Mac/Windows 本机无法使用。"}
     login_first = bool(payload.get("login_first"))
     cfg = load_config()
     base_url = (payload.get("base_url") or cfg.get("base_url") or "").strip()
