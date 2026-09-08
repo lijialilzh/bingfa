@@ -339,10 +339,17 @@ class TestEngine:
                        "ts": time.time()})
             return
         if not series_uids:
-            self.emit({"type": "error",
-                       "msg": "未获取到序列，请检查 study_uid 是否正确",
-                       "ts": time.time()})
-            return
+            # studies 接口可能返回空（如 CT 产品），回退用配置的 series_uid
+            if self.series_uid:
+                series_uids = [self.series_uid]
+                self.emit({"type": "progress",
+                           "msg": "studies 未返回序列，改用配置的 series_uid",
+                           "ts": time.time()})
+            else:
+                self.emit({"type": "error",
+                           "msg": "未获取到序列，请检查 study_uid 或 series_uid 是否正确",
+                           "ts": time.time()})
+                return
         # 优先用配置的 series_uid（若在列表中），否则用第一个序列
         series_uid = self.series_uid if self.series_uid in series_uids else series_uids[0]
 
@@ -598,6 +605,13 @@ class TestEngine:
                     images = resp.json().get("images", [])
                     frame_urls = [f"{self.base_url}/{img['storagePath']}"
                                   for img in images]
+                    # studies 接口可能返回空（如 CT 产品），用 dcp 图像数回填总张数
+                    if st.total_frames <= 0 and frame_urls:
+                        st.total_frames = len(frame_urls)
+                        self.emit({"type": "total_frames", "user_id": user_id,
+                                   "account": account,
+                                   "total_frames": st.total_frames,
+                                   "ts": time.time()})
                 except Exception:
                     pass
                 await self._emit_resp(user_id, account, resp.status_code,
