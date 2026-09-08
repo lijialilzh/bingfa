@@ -108,6 +108,7 @@
   ],
   "login_api_path": "/api/v1/user/login",
   "check_login_prefix": "/api/v1/user/checkLogin",
+  "checklist_api_path": "/api/v1/studies/query/online",
   "studies_api_path": "/api/v1/studies",
   "dcp_api_path_template": "/api/repacs/series/{series_uid}/dcp",
   "frame_prefix": "/xa_brain_encrypt/",

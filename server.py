@@ -1212,7 +1212,8 @@ async def report() -> dict:
 @app.get("/api/aggregate")
 async def aggregate() -> dict:
     """聚合报告：按接口统计，字段与单接口测试一致
-    （URL/主机/端口/方法/路径/状态码/结果/循环次数/平均耗时/最小耗时/最大耗时/大小）。"""
+    （URL/主机/端口/方法/路径/状态码/结果/循环次数/平均耗时/最小耗时/最大耗时/大小）。
+    循环多轮时，额外按轮次分组统计。"""
     import statistics
     from urllib.parse import urlparse
     # 从事件日志中聚合
@@ -1226,54 +1227,72 @@ async def aggregate() -> dict:
         if tag not in tag_method:
             tag_method[tag] = r.get("method", "GET")
 
-    # 按 tag 分组统计响应
-    by_tag: dict = {}
-    for r in resps:
-        tag = r.get("tag", "其他")
-        if tag not in by_tag:
-            by_tag[tag] = {"耗时": [], "大小": [], "状态码": [], "url": "",
-                           "成功": 0, "失败": 0}
-        info = by_tag[tag]
-        status = r.get("status", 0)
-        if 0 < status < 400:
-            info["成功"] += 1
-        else:
-            info["失败"] += 1
-        info["状态码"].append(status)
-        elapsed = r.get("elapsed_ms", 0)
-        if elapsed > 0:
-            info["耗时"].append(elapsed)
-        size = r.get("size", 0)
-        if size > 0:
-            info["大小"].append(size)
-        if not info["url"]:
-            info["url"] = r.get("url", "")
-
     def avg(vals):
         return round(statistics.mean(vals), 1) if vals else 0
 
-    # 接口汇总（字段与单接口测试一致）
-    api_summary = []
-    for tag, info in by_tag.items():
-        parsed = urlparse(info["url"])
-        # 多数状态码
-        status = max(set(info["状态码"]), key=info["状态码"].count) if info["状态码"] else 0
-        ok = 0 < status < 400
-        api_summary.append({
-            "接口": tag,
-            "URL": info["url"],
-            "主机": parsed.hostname or "",
-            "端口": parsed.port or (443 if parsed.scheme == "https" else 80),
-            "方法": tag_method.get(tag, "GET"),
-            "路径": parsed.path or "/",
-            "状态码": status,
-            "结果": "✅ 通过" if ok else "❌ 失败",
-            "循环次数": info["成功"] + info["失败"],
-            "平均耗时": avg(info["耗时"]),
-            "最小耗时": round(min(info["耗时"]), 1) if info["耗时"] else 0,
-            "最大耗时": round(max(info["耗时"]), 1) if info["耗时"] else 0,
-            "大小": avg(info["大小"]),
-        })
+    def build_summary(resp_list: list) -> list:
+        """按 tag 分组统计一组响应，返回接口汇总列表（按调用顺序排序）。"""
+        by_tag: dict = {}
+        tag_order: list = []
+        for r in resp_list:
+            tag = r.get("tag", "其他")
+            if tag not in by_tag:
+                by_tag[tag] = {"耗时": [], "大小": [], "状态码": [], "url": "",
+                               "成功": 0, "失败": 0}
+                tag_order.append(tag)
+            info = by_tag[tag]
+            status = r.get("status", 0)
+            if 0 < status < 400:
+                info["成功"] += 1
+            else:
+                info["失败"] += 1
+            info["状态码"].append(status)
+            elapsed = r.get("elapsed_ms", 0)
+            if elapsed > 0:
+                info["耗时"].append(elapsed)
+            size = r.get("size", 0)
+            if size > 0:
+                info["大小"].append(size)
+            if not info["url"]:
+                info["url"] = r.get("url", "")
+
+        api_summary = []
+        for tag in tag_order:
+            info = by_tag[tag]
+            parsed = urlparse(info["url"])
+            status = max(set(info["状态码"]), key=info["状态码"].count) if info["状态码"] else 0
+            ok = 0 < status < 400
+            api_summary.append({
+                "接口": tag,
+                "URL": info["url"],
+                "主机": parsed.hostname or "",
+                "端口": parsed.port or (443 if parsed.scheme == "https" else 80),
+                "方法": tag_method.get(tag, "GET"),
+                "路径": parsed.path or "/",
+                "状态码": status,
+                "结果": "✅ 通过" if ok else "❌ 失败",
+                "循环次数": info["成功"] + info["失败"],
+                "平均耗时": avg(info["耗时"]),
+                "最小耗时": round(min(info["耗时"]), 1) if info["耗时"] else 0,
+                "最大耗时": round(max(info["耗时"]), 1) if info["耗时"] else 0,
+                "大小": avg(info["大小"]),
+            })
+        return api_summary
+
+    # 全部响应汇总
+    api_summary = build_summary(resps)
+
+    # 按轮次分组（仅图像帧响应带 round 字段）
+    round_summaries = []
+    max_round = max([r.get("round", 0) for r in resps], default=0)
+    if max_round > 1:
+        for rnd in range(1, max_round + 1):
+            round_resps = [r for r in resps if r.get("round") == rnd]
+            if round_resps:
+                round_summaries.append({
+                    "轮次": rnd,
+                    "接口汇总": build_summary(round_resps),
+                })
 
     # 状态统计
     states = engine._snapshot() if engine else []
@@ -1286,6 +1305,7 @@ async def aggregate() -> dict:
                              min([e.get("ts", 0) for e in reqs if e.get("ts")]), 1)
                             if reqs and resps else 0.0,
         "接口汇总": api_summary,
+        "轮次汇总": round_summaries,
         "状态统计": {
             "完成": sum(1 for s in states if s["status"] == "done"),
             "超时": sum(1 for s in states if s["status"] == "timeout"),

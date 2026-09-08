@@ -669,7 +669,7 @@
     <div class="stat"><div class="num red" id="sError">0</div><div class="lbl">出错</div></div>
     <div class="stat"><div class="num" id="sAvgLogin">-</div><div class="lbl">平均登录(ms)</div></div>
     <div class="stat"><div class="num" id="sAvgViewer">-</div><div class="lbl" id="lblAvgViewer">平均阅片页(ms)</div></div>
-    <div class="stat"><div class="num" id="sAvgAll">-</div><div class="lbl" id="lblAvgAll">平均整套图像加载(ms)</div></div>
+    <div class="stat"><div class="num" id="sAvgAll">-</div><div class="lbl" id="lblAvgAll">平均总耗时(ms)</div></div>
     <div class="stat"><div class="num" id="sFrames">0</div><div class="lbl" id="lblFrames">图像张数请求总数</div></div>
   </div>
 
@@ -686,10 +686,7 @@
 
   <div class="panel" style="margin-top:16px">
     <h2>结果汇总</h2>
-    <table class="summary-table" id="summaryTable">
-      <thead><tr><th>指标</th><th>avg</th><th>min</th><th>max</th><th>p50</th><th>p95</th><th>p99</th></tr></thead>
-      <tbody id="summaryBody"></tbody>
-    </table>
+    <div id="summaryContainer"></div>
   </div>
 
   <div class="panel" style="margin-top:16px">
@@ -2366,7 +2363,7 @@ function handleEvent(ev) {
     framesTotal = 0;
     logCount = 0;
     document.getElementById("log").innerHTML = "";
-    document.getElementById("summaryBody").innerHTML = "";
+    document.getElementById("summaryContainer").innerHTML = "";
     renderUsers();
     const modeText = mode === "frame_only" ? "图像加载测试"
       : (mode === "custom" ? "自定义接口测试"
@@ -2412,7 +2409,7 @@ function handleEvent(ev) {
   else if (ev.type === "round_done") {
     // 循环轮次完成：记录该轮耗时
     if (ev.total_rounds > 1) {
-      addLog("info", `[${ev.account}] 第 ${ev.round}/${ev.total_rounds} 轮完成：${ev.round_ms}ms（${ev.frames_loaded} 张）`);
+      addLog("info", `[${ev.account}] 第 ${ev.round}/${ev.total_rounds} 轮完成：整套流程 ${ev.round_ms}ms（${ev.frames_loaded} 张）`);
     }
   }
   else if (ev.type === "user_done") {
@@ -2532,10 +2529,12 @@ async function loadAggregate() {
     <span style="margin-left:16px">用户数：<b>${data.users ?? 0}</b></span>
   </div>`;
 
-  // 接口汇总表（字段与单接口测试一致：接口为行，指标为列）
-  const apis = data.接口汇总 || [];
-  if (apis.length) {
-    html += `<div style="overflow-x:auto">
+  // 接口汇总表渲染函数
+  function renderApiTable(apis, title) {
+    if (!apis || !apis.length) return "";
+    let h = "";
+    if (title) h += `<div style="font-weight:600;margin:12px 0 6px">${title}</div>`;
+    h += `<div style="overflow-x:auto">
       <table class="summary-table" style="min-width:1200px">
       <thead><tr>
         <th style="white-space:nowrap">接口</th>
@@ -2556,7 +2555,7 @@ async function loadAggregate() {
     for (const a of apis) {
       const ok = a.结果 === "✅ 通过";
       const statusColor = ok ? "var(--green)" : "var(--red)";
-      html += `<tr>
+      h += `<tr>
         <td style="white-space:nowrap">${escapeHtml(a.接口 || "")}</td>
         <td style="word-break:break-all">${escapeHtml(a.URL || "")}</td>
         <td style="white-space:nowrap">${escapeHtml(a.主机 || "")}</td>
@@ -2572,8 +2571,12 @@ async function loadAggregate() {
         <td class="num">${a.大小 ?? 0} 字节</td>
       </tr>`;
     }
-    html += `</tbody></table></div>`;
+    h += `</tbody></table></div>`;
+    return h;
   }
+
+  // 全部接口汇总（只显示一次聚合）
+  html += renderApiTable(data.接口汇总, "接口汇总");
 
   // 状态统计
   const st = data.状态统计 || {};
@@ -2640,7 +2643,7 @@ function addLog(cls, text, tag) {
   let tagHtml = "";
   if (tag) {
     const tagCls = tag === "登录" ? "tag-login" : tag === "图像帧" ? "tag-frame"
-      : (tag === "图像元数据" || tag === "序列数据" || tag === "消息令牌") ? "tag-meta" : "tag-other";
+      : (tag === "图像元数据" || tag === "序列数据" || tag === "消息令牌" || tag === "检查列表") ? "tag-meta" : "tag-other";
     tagHtml = `<span class="tag ${tagCls}">${tag}</span>`;
   }
   row.innerHTML = `<span class="t">${time}</span>${tagHtml}${text}`;
@@ -2652,17 +2655,31 @@ function addLog(cls, text, tag) {
 
 function renderUsers() {
   const grid = document.getElementById("usersGrid");
-  grid.innerHTML = "";
   const mode = window._testMode || "full";
   const isCustom = mode === "custom";
   const statusText = { pending: "等待", login: "登录中", viewer: "进入阅片",
     loading: isCustom ? "执行中" : "加载图像", done: "完成", timeout: "超时未完成",
     stopped: "已停止", error: "出错" };
-  for (const u of users) {
-    const cell = document.createElement("div");
+
+  // 复用已有 DOM 元素，避免 innerHTML="" 重建导致闪烁
+  const existing = grid.children;
+  // 如果数量不匹配（用户数变了），才全量重建
+  if (existing.length !== users.length) {
+    grid.innerHTML = "";
+    for (const u of users) {
+      const cell = document.createElement("div");
+      cell._uid = u.id;
+      grid.appendChild(cell);
+    }
+  }
+
+  for (let i = 0; i < users.length; i++) {
+    const u = users[i];
+    const cell = grid.children[i];
+    if (cell._uid !== u.id) cell._uid = u.id;
     cell.className = "user-cell " + u.status;
 
-    // 进度条：自定义接口模式显示请求次数，图像模式显示帧进度
+    // 进度条
     let progress = "";
     if (u.status === "loading" || u.status === "done" || u.status === "timeout") {
       if (isCustom) {
@@ -2676,7 +2693,7 @@ function renderUsers() {
       }
     }
 
-    // 阶段耗时（按时间先后顺序：登录 → 页面 → 图像/总耗时）
+    // 阶段耗时
     let timing = "";
     if (u.login_ms > 0) timing += `<div class="st">登录 ${Math.round(u.login_ms)}ms</div>`;
     if (u.viewer_ms > 0) timing += `<div class="st">页面 ${Math.round(u.viewer_ms)}ms</div>`;
@@ -2685,16 +2702,13 @@ function renderUsers() {
         ? `<div class="st">总耗时 ${Math.round(u.all_frames_ms)}ms</div>`
         : `<div class="st">图像 ${Math.round(u.all_frames_ms)}ms</div>`;
     }
-    // 轮次信息
     if (u.total_rounds > 1) {
       timing += `<div class="st">第 ${u.round || 0}/${u.total_rounds} 轮</div>`;
     }
 
-    // 显示顺序：账号 → 已完成阶段耗时 → 当前状态 → 进度条
     cell.innerHTML = `<div class="acct">${u.account}</div>
       ${timing}
       <div class="st">${statusText[u.status] || u.status}</div>${progress}`;
-    grid.appendChild(cell);
   }
 }
 
@@ -2717,7 +2731,7 @@ function updateStatLabels(mode) {
     set("lblLoading", "加载中");
     set("lblDone", "加载完成");
     set("lblAvgViewer", "平均阅片页(ms)");
-    set("lblAvgAll", "平均整套图像加载(ms)");
+    set("lblAvgAll", "平均总耗时(ms)");
     set("lblFrames", "图像张数请求总数");
   }
 }
@@ -2759,45 +2773,140 @@ function pct(a, p) {
 }
 
 function renderSummary(states) {
+  const container = document.getElementById("summaryContainer");
+  if (!container) return;
+  container.innerHTML = "";
+
   const loginMs = states.filter(s => s.login_ms > 0).map(s => s.login_ms);
   const viewerMs = states.filter(s => s.viewer_ms > 0).map(s => s.viewer_ms);
   const firstMs = states.filter(s => s.first_frame_ms > 0).map(s => s.first_frame_ms);
   const allMs = states.filter(s => s.all_frames_ms > 0).map(s => s.all_frames_ms);
   const frames = states.filter(s => s.frames_loaded > 0).map(s => s.frames_loaded);
 
-  const rows = [
-    ["登录耗时(ms)", loginMs],
-    ["阅片页加载(ms)", viewerMs],
-    ["首张耗时(ms)", firstMs],
-    ["整套图像加载完成(ms)", allMs],
-    ["图像张数加载数", frames],
-  ];
-
-  // 循环多轮时，逐轮统计耗时
+  // 循环轮数
   const roundCount = Math.max(0, ...states.map(s => (s.round_times || []).length));
-  if (roundCount > 1) {
-    for (let r = 0; r < roundCount; r++) {
-      const roundMs = states
-        .filter(s => (s.round_times || []).length > r)
-        .map(s => s.round_times[r]);
-      rows.push([`第 ${r + 1} 轮图像加载(ms)`, roundMs]);
-    }
+
+  // 生成轮次列头
+  const roundHeaders = [];
+  for (let r = 0; r < roundCount; r++) {
+    roundHeaders.push(`第 ${r + 1} 次(ms)`);
+  }
+  // 取某指标第 r 轮的值数组
+  function roundVals(getter, r) {
+    return states.filter(s => (s.round_times || []).length > r).map(getter);
   }
 
-  const body = document.getElementById("summaryBody");
-  body.innerHTML = "";
-  for (const [name, arr] of rows) {
-    if (!arr.length) continue;
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${name}</td>
-      <td class="num">${Math.round(avg(arr))}</td>
-      <td class="num">${Math.round(Math.min(...arr))}</td>
-      <td class="num">${Math.round(Math.max(...arr))}</td>
-      <td class="num">${pct(arr, 50)}</td>
-      <td class="num">${pct(arr, 95)}</td>
-      <td class="num">${pct(arr, 99)}</td>`;
-    body.appendChild(tr);
+  // 生成统计表：列顺序为 指标 | 第N次... | avg | min | max
+  function buildTable(title, rows, roundHeaders) {
+    roundHeaders = roundHeaders || [];
+    let html = `<div style="font-weight:600;margin:12px 0 6px">${title}</div>`;
+    html += `<table class="summary-table">
+      <thead><tr><th>指标</th>`;
+    for (const h of roundHeaders) html += `<th style="white-space:nowrap">${h}</th>`;
+    html += `<th>avg</th><th>min</th><th>max</th></tr></thead><tbody>`;
+    for (const row of rows) {
+      const name = row[0], arr = row[1];
+      const roundValsArr = row.slice(2); // 每轮的值数组
+      if (!arr.length && !roundValsArr.some(v => v && v.length)) continue;
+      html += `<tr><td>${name}</td>`;
+      for (const rv of roundValsArr) {
+        html += `<td class="num">${rv && rv.length ? Math.round(avg(rv)) : "-"}</td>`;
+      }
+      html += `<td class="num">${arr.length ? Math.round(avg(arr)) : "-"}</td>
+        <td class="num">${arr.length ? Math.round(Math.min(...arr)) : "-"}</td>
+        <td class="num">${arr.length ? Math.round(Math.max(...arr)) : "-"}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
   }
+
+  // 1. 用户明细表：每个用户一行，显示每轮整套流程耗时
+  function buildUserDetailTable(title, states, roundCount) {
+    if (!states.length) return "";
+    let html = `<div style="font-weight:600;margin:12px 0 6px">${title}</div>`;
+    html += `<table class="summary-table"><thead><tr><th>用户</th><th>状态</th>`;
+    for (let r = 0; r < roundCount; r++) {
+      html += `<th style="white-space:nowrap">第 ${r + 1} 轮(ms)</th>`;
+    }
+    if (roundCount > 1) html += `<th style="white-space:nowrap">总耗时(ms)</th>`;
+    html += `</tr></thead><tbody>`;
+    const statusText = { pending: "等待", login: "登录中", viewer: "进入阅片",
+      loading: "加载中", done: "✅完成", timeout: "⏱超时", stopped: "已停止", error: "❌出错" };
+    for (const s of states) {
+      const rt = s.round_times || [];
+      let total = 0;
+      html += `<tr><td>${escapeHtml(s.account || "")}</td>
+        <td style="white-space:nowrap">${statusText[s.status] || s.status}</td>`;
+      for (let r = 0; r < roundCount; r++) {
+        const v = rt[r];
+        if (v != null) { html += `<td class="num">${Math.round(v)}</td>`; total += v; }
+        else html += `<td class="num">-</td>`;
+      }
+      if (roundCount > 1) html += `<td class="num">${Math.round(total)}</td>`;
+      html += `</tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  container.innerHTML += buildUserDetailTable("用户明细（每轮整套流程耗时）", states, roundCount);
+
+  // 2. 汇总统计表（avg/min/max）
+  function buildTable(title, rows, roundHeaders) {
+    roundHeaders = roundHeaders || [];
+    let html = `<div style="font-weight:600;margin:16px 0 6px">${title}</div>`;
+    html += `<table class="summary-table">
+      <thead><tr><th>指标</th>`;
+    for (const h of roundHeaders) html += `<th style="white-space:nowrap">${h}</th>`;
+    html += `<th>avg</th><th>min</th><th>max</th></tr></thead><tbody>`;
+    for (const row of rows) {
+      const name = row[0], arr = row[1];
+      const roundValsArr = row.slice(2);
+      if (!arr.length && !roundValsArr.some(v => v && v.length)) continue;
+      // 特殊行：只有聚合数据、无每轮数据，合并所有列为一个值
+      const hasRoundData = roundValsArr.some(v => v && v.length);
+      if (!hasRoundData && arr.length) {
+        const totalCols = roundHeaders.length + 3; // 轮次列 + avg/min/max
+        html += `<tr><td>${name}</td>
+          <td class="num" colspan="${totalCols}" style="text-align:center;font-weight:600;color:var(--cyan)">${Math.round(avg(arr))} ms</td></tr>`;
+        continue;
+      }
+      html += `<tr><td>${name}</td>`;
+      for (const rv of roundValsArr) {
+        html += `<td class="num">${rv && rv.length ? Math.round(avg(rv)) : "-"}</td>`;
+      }
+      html += `<td class="num">${arr.length ? Math.round(avg(arr)) : "-"}</td>
+        <td class="num">${arr.length ? Math.round(Math.min(...arr)) : "-"}</td>
+        <td class="num">${arr.length ? Math.round(Math.max(...arr)) : "-"}</td></tr>`;
+    }
+    html += `</tbody></table>`;
+    return html;
+  }
+
+  // 汇总统计表：始终显示"第N次"列，格式统一
+  const allFrameMs = states.map(s => (s.round_frame_ms || [])[0] || 0).filter(v => v > 0);
+  const allRoundMs = states.map(s => (s.round_times || [])[0] || 0).filter(v => v > 0);
+  const overallRows = [
+    ["登录耗时(ms)", loginMs,
+      ...Array.from({ length: roundCount }, (_, r) =>
+        roundVals(s => (s.round_login_ms || [])[r], r))],
+    ["阅片页加载(ms)", viewerMs,
+      ...Array.from({ length: roundCount }, (_, r) =>
+        roundVals(s => (s.round_viewer_ms || [])[r], r))],
+    ["首张耗时(ms)", firstMs,
+      ...Array.from({ length: roundCount }, (_, r) =>
+        roundVals(s => (s.round_first_frame_ms || [])[r], r))],
+    ["图像加载耗时(ms)", allFrameMs,
+      ...Array.from({ length: roundCount }, (_, r) =>
+        roundVals(s => (s.round_frame_ms || [])[r], r))],
+    ["整套流程耗时(ms)", allRoundMs,
+      ...Array.from({ length: roundCount }, (_, r) =>
+        roundVals(s => s.round_times[r], r))],
+  ];
+  if (roundCount > 1) {
+    overallRows.push([`${roundCount} 轮总耗时(ms)`, allMs, ...Array(roundCount).fill(null)]);
+  }
+  container.innerHTML += buildTable("汇总统计", overallRows, roundHeaders);
 }
 
 function setRunning(r) {
@@ -2917,7 +3026,7 @@ async function clearLog() {
   await apiFetch("/api/clear", { method: "POST" });
   // 清空前端显示
   document.getElementById("log").innerHTML = "";
-  document.getElementById("summaryBody").innerHTML = "";
+  document.getElementById("summaryContainer").innerHTML = "";
   document.getElementById("evidence").innerHTML = "测试完成后显示";
   users = [];
   framesTotal = 0;

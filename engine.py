@@ -36,6 +36,7 @@ DEFAULT_CONFIG = {
     # ---- 接口路径（换产品时按需修改）----
     "login_api_path": "/api/v1/user/login",
     "check_login_prefix": "/api/v1/user/checkLogin",
+    "checklist_api_path": "/api/v1/studies/query/online",
     "studies_api_path": "/api/v1/studies",
     "dcp_api_path_template": "/api/repacs/series/{series_uid}/dcp",
     "frame_prefix": "/xa_brain_encrypt/",
@@ -140,7 +141,11 @@ class UserState:
     all_frames_ms: float = 0.0       # 整套图像全部加载完成耗时
     frames_loaded: int = 0
     total_frames: int = 0            # 该检查的总帧数
-    round_times: list = None         # 每轮图像加载耗时（ms），循环多轮时逐轮记录
+    round_times: list = None         # 每轮整套流程耗时（ms）
+    round_login_ms: list = None      # 每轮登录耗时
+    round_viewer_ms: list = None     # 每轮阅片页加载耗时
+    round_first_frame_ms: list = None  # 每轮首张耗时
+    round_frame_ms: list = None     # 每轮图像下载耗时
     # ---- 可审计证据 ----
     session_token: str = ""          # 登录后服务器下发的独立会话 token
     user_id_server: str = ""         # 服务器返回的 userId
@@ -152,6 +157,14 @@ class UserState:
     def __post_init__(self):
         if self.round_times is None:
             self.round_times = []
+        if self.round_login_ms is None:
+            self.round_login_ms = []
+        if self.round_viewer_ms is None:
+            self.round_viewer_ms = []
+        if self.round_first_frame_ms is None:
+            self.round_first_frame_ms = []
+        if self.round_frame_ms is None:
+            self.round_frame_ms = []
 
 
 class TestEngine:
@@ -176,6 +189,7 @@ class TestEngine:
         # ---- 接口路径（可配置，换产品时修改）----
         self.login_api_path = cfg.get("login_api_path", "/api/v1/user/login")
         self.check_login_prefix = cfg.get("check_login_prefix", "/api/v1/user/checkLogin")
+        self.checklist_api_path = cfg.get("checklist_api_path", "/api/v1/studies/query/online")
         self.studies_api_path = cfg.get("studies_api_path", "/api/v1/studies")
         self.dcp_api_path_template = cfg.get(
             "dcp_api_path_template", "/api/repacs/series/{series_uid}/dcp")
@@ -424,7 +438,8 @@ class TestEngine:
                            "total_rounds": self.rounds, "ts": time.time()})
                 round_ms = await self._download_frames(user_id, st.account,
                                                        frame_urls, set_size,
-                                                       client, st, t0)
+                                                       client, st, t0,
+                                                       round_idx=round_idx + 1)
                 st.round_times.append(round_ms)
                 self.emit({"type": "round_done", "user_id": user_id,
                            "account": st.account, "round": round_idx + 1,
@@ -454,10 +469,15 @@ class TestEngine:
 
     async def _emit_resp(self, user_id: int, account: str, status: int,
                          url: str, tag: str, elapsed_ms: float,
-                         error: str = "", size: int = 0) -> None:
+                         error: str = "", size: int = 0,
+                         round_idx: int = 0) -> None:
         ev = {"type": "response", "user_id": user_id, "account": account,
               "status": status, "url": url, "tag": tag,
               "elapsed_ms": elapsed_ms, "size": size, "ts": time.time()}
+        # 优先用传入的 round_idx，否则用当前轮次
+        r = round_idx or getattr(self, "_current_round", 0)
+        if r:
+            ev["round"] = r
         if error:
             ev["error"] = error
         self.emit(ev)
@@ -465,7 +485,7 @@ class TestEngine:
     async def _download_frames(self, user_id: int, account: str,
                                frame_urls: list[str], set_size: int,
                                client: httpx.AsyncClient, st: UserState,
-                               t0: float) -> float:
+                               t0: float, round_idx: int = 0) -> float:
         """并发下载一套图像帧（模拟浏览器同域名并发连接）。
 
         返回本轮下载耗时（ms）。
@@ -490,11 +510,13 @@ class TestEngine:
                             st.first_frame_ms = (t_req - t0) * 1000
                     await self._emit_resp(user_id, account, resp.status_code,
                                           url, "图像帧", elapsed,
-                                          size=len(resp.content))
+                                          size=len(resp.content),
+                                          round_idx=round_idx)
                 except Exception as e:
                     elapsed = round((time.perf_counter() - t_req) * 1000, 1)
                     await self._emit_resp(user_id, account, 0, url, "图像帧",
-                                          elapsed, f"{type(e).__name__}: {e}")
+                                          elapsed, f"{type(e).__name__}: {e}",
+                                          round_idx=round_idx)
 
         await asyncio.gather(*(fetch_one(u) for u in urls))
         return round((time.perf_counter() - round_t0) * 1000, 1)
@@ -510,218 +532,255 @@ class TestEngine:
                    "account": account, "status": "login", "ts": time.time()})
 
         t0 = time.perf_counter()
-        t_login_ok = 0.0
 
         async with httpx.AsyncClient(timeout=120, follow_redirects=True) as client:
-            # ---- 1. 登录 ----
-            login_url = self.base_url + self.login_api_path
-            login_body = json.dumps({"name": account, "password": pwd_hash})
-            t_req = time.perf_counter()
-            st.login_ts = time.time()
-            await self._emit_req(user_id, account, "POST", login_url, "登录")
-            try:
-                resp = await client.post(login_url, content=login_body,
-                                         headers={"Content-Type": "application/json"})
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                st.login_ms = elapsed
-                data = resp.json()
-                if data.get("code") == 10000:
-                    st.session_token = resp.cookies.get("token", "")
-                    st.user_id_server = str(data.get("data", {}).get("userId", ""))
-                    t_login_ok = time.perf_counter()
-                    st.viewer_ts = time.time()
-                    await self._emit_resp(user_id, account, resp.status_code,
-                                          login_url, "登录", elapsed,
-                                          size=len(resp.content))
-                    self.emit({"type": "login_ok", "user_id": user_id,
-                               "account": account, "login_ms": elapsed,
-                               "session_token": st.session_token,
-                               "ts": time.time()})
-                    st.status = "viewer"
-                    self.emit({"type": "user_status", "user_id": user_id,
-                               "account": account, "status": "viewer",
-                               "ts": time.time()})
-                else:
-                    await self._emit_resp(user_id, account, resp.status_code,
-                                          login_url, "登录", elapsed,
-                                          size=len(resp.content))
-                    st.status = "error"
-                    st.error = "登录失败"
-                    self.emit({"type": "user_status", "user_id": user_id,
-                               "account": account, "status": "error",
-                               "error": st.error, "ts": time.time()})
-                    return
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, login_url, "登录",
-                                      elapsed, f"{type(e).__name__}: {e}")
-                st.status = "error"
-                st.error = f"{type(e).__name__}: {e}"
-                self.emit({"type": "user_status", "user_id": user_id,
-                           "account": account, "status": "error",
-                           "error": st.error, "ts": time.time()})
-                return
-
-            # ---- 2. 会话校验 ----
-            check_url = self.base_url + self.check_login_prefix
-            t_req = time.perf_counter()
-            await self._emit_req(user_id, account, "GET", check_url, "会话校验")
-            try:
-                resp = await client.get(check_url)
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, resp.status_code,
-                                      check_url, "会话校验", elapsed,
-                                      size=len(resp.content))
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, check_url, "会话校验",
-                                      elapsed, f"{type(e).__name__}: {e}")
-
-            # ---- 2.5 消息令牌 ----
-            msg_token_url = self.base_url + self.msg_token_prefix
-            t_req = time.perf_counter()
-            await self._emit_req(user_id, account, "GET", msg_token_url, "消息令牌")
-            try:
-                resp = await client.get(msg_token_url)
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, resp.status_code,
-                                      msg_token_url, "消息令牌", elapsed,
-                                      size=len(resp.content))
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, msg_token_url,
-                                      "消息令牌", elapsed, f"{type(e).__name__}: {e}")
-
-            # ---- 3. 图像元数据 ----
-            studies_url = (self.base_url + self.studies_api_path +
-                           f"?studyInstanceUID={self.study_uid}&taskType=xa_brain&product=XA_BRAIN")
-            t_req = time.perf_counter()
-            await self._emit_req(user_id, account, "GET", studies_url, "图像元数据")
-            series_uids: list[str] = []
-            try:
-                resp = await client.get(studies_url)
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                try:
-                    data = resp.json()
-                    total = 0
-                    for study in data.get("data", []):
-                        for series in study.get("series", []):
-                            total += int(series.get("imgFrameNumber", 0))
-                            suid = series.get("seriesInstanceUID")
-                            if suid:
-                                series_uids.append(suid)
-                    if total > 0:
-                        st.total_frames = total
-                        self.emit({"type": "total_frames", "user_id": user_id,
-                                   "account": account, "total_frames": total,
-                                   "ts": time.time()})
-                except Exception:
-                    pass
-                await self._emit_resp(user_id, account, resp.status_code,
-                                      studies_url, "图像元数据", elapsed,
-                                      size=len(resp.content))
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, studies_url,
-                                      "图像元数据", elapsed, f"{type(e).__name__}: {e}")
-
-            # ---- 4. 序列数据 ----
-            # 优先用配置的 series_uid（若在序列列表中），否则用解析出的第一个序列
-            series_uid = (self.series_uid if self.series_uid in series_uids
-                          else (series_uids[0] if series_uids else self.series_uid))
-            dcp_url = self.base_url + self.dcp_api_path_template.format(
-                series_uid=series_uid)
-            t_req = time.perf_counter()
-            await self._emit_req(user_id, account, "GET", dcp_url, "序列数据")
-            frame_urls = []
-            try:
-                resp = await client.get(dcp_url)
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                try:
-                    images = resp.json().get("images", [])
-                    frame_urls = [f"{self.base_url}/{img['storagePath']}"
-                                  for img in images]
-                    # studies 接口可能返回空（如 CT 产品），用 dcp 图像数回填总张数
-                    if st.total_frames <= 0 and frame_urls:
-                        st.total_frames = len(frame_urls)
-                        self.emit({"type": "total_frames", "user_id": user_id,
-                                   "account": account,
-                                   "total_frames": st.total_frames,
-                                   "ts": time.time()})
-                except Exception:
-                    pass
-                await self._emit_resp(user_id, account, resp.status_code,
-                                      dcp_url, "序列数据", elapsed,
-                                      size=len(resp.content))
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, dcp_url, "序列数据",
-                                      elapsed, f"{type(e).__name__}: {e}")
-
-            # ---- 5. 缩略图 ----
-            thumb_url = f"{self.base_url}{self.thumbnail_prefix}/{series_uid}/thumbnail.jpg"
-            t_req = time.perf_counter()
-            await self._emit_req(user_id, account, "GET", thumb_url, "缩略图")
-            try:
-                resp = await client.get(thumb_url)
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, resp.status_code,
-                                      thumb_url, "缩略图", elapsed,
-                                      size=len(resp.content))
-            except Exception as e:
-                elapsed = round((time.perf_counter() - t_req) * 1000, 1)
-                await self._emit_resp(user_id, account, 0, thumb_url, "缩略图",
-                                      elapsed, f"{type(e).__name__}: {e}")
-
-            # ---- 6. 图像帧（循环 rounds 轮，每轮加载一套帧） ----
-            if t_login_ok > 0:
-                st.viewer_ms = (time.perf_counter() - t_login_ok) * 1000
-            st.status = "loading"
-            self.emit({"type": "user_status", "user_id": user_id,
-                       "account": account, "status": "loading", "ts": time.time()})
-            if not frame_urls:
-                st.status = "timeout"
-                self.emit({"type": "user_done", "user_id": user_id,
-                           "account": account, "frames_loaded": 0,
-                           "total_frames": st.total_frames,
-                           "all_frames_ms": 0, "status": "timeout",
-                           "ts": time.time()})
-                return
-
-            # 一套帧的数量：优先用 total_frames，否则用帧列表长度
-            set_size = st.total_frames if st.total_frames > 0 else len(frame_urls)
             for round_idx in range(self.rounds):
                 if self._stop:
                     break
-                # 每轮重置帧计数，进度从 0 开始
-                st.frames_loaded = 0
-                self.emit({"type": "round_start", "user_id": user_id,
-                           "account": account, "round": round_idx + 1,
-                           "total_rounds": self.rounds, "ts": time.time()})
-                round_ms = await self._download_frames(user_id, account,
-                                                       frame_urls, set_size,
-                                                       client, st, t0)
+                self._current_round = round_idx + 1
+                if self.rounds > 1:
+                    self.emit({"type": "round_start", "user_id": user_id,
+                               "account": account, "round": round_idx + 1,
+                               "total_rounds": self.rounds, "ts": time.time()})
+                round_t0 = time.perf_counter()
+                ok, r_login, r_viewer, r_first, r_frames = await self._run_user_one_round(
+                    user_id, account, pwd_hash, st, client, t0, round_idx)
+                round_ms = round((time.perf_counter() - round_t0) * 1000, 1)
                 st.round_times.append(round_ms)
-                self.emit({"type": "round_done", "user_id": user_id,
-                           "account": account, "round": round_idx + 1,
-                           "total_rounds": self.rounds,
-                           "round_ms": round_ms,
-                           "frames_loaded": st.frames_loaded,
-                           "ts": time.time()})
+                st.round_login_ms.append(r_login)
+                st.round_viewer_ms.append(r_viewer)
+                st.round_first_frame_ms.append(r_first)
+                st.round_frame_ms.append(r_frames)
+                if self.rounds > 1:
+                    self.emit({"type": "round_done", "user_id": user_id,
+                               "account": account, "round": round_idx + 1,
+                               "total_rounds": self.rounds,
+                               "round_ms": round_ms,
+                               "frames_loaded": st.frames_loaded,
+                               "ts": time.time()})
+                if not ok and not self._stop:
+                    break  # 登录失败等致命错误，不再继续后续轮次
 
-            st.all_frames_ms = (time.perf_counter() - t0) * 1000
-            if self._stop:
-                st.status = "stopped"
-            elif st.total_frames > 0 and st.frames_loaded >= st.total_frames:
-                st.status = "done"
+        # 3 轮总耗时 = 各轮耗时之和（而非 t0 到结束，避免轮间间隔被计入）
+        st.all_frames_ms = round(sum(st.round_times), 1) if st.round_times else (time.perf_counter() - t0) * 1000
+        if self._stop:
+            st.status = "stopped"
+        elif st.total_frames > 0 and st.frames_loaded >= st.total_frames:
+            st.status = "done"
+        else:
+            st.status = "timeout"
+        self.emit({"type": "user_done", "user_id": user_id,
+                   "account": account, "frames_loaded": st.frames_loaded,
+                   "total_frames": st.total_frames,
+                   "all_frames_ms": st.all_frames_ms,
+                   "round_times": st.round_times,
+                   "status": st.status, "ts": time.time()})
+
+    async def _run_user_one_round(self, user_id: int, account: str,
+                                  pwd_hash: str, st: UserState,
+                                  client: httpx.AsyncClient,
+                                  t0: float, round_idx: int) -> tuple:
+        """执行一轮完整流程：登录→检查列表→图像元数据→序列数据→缩略图→图像帧。
+        返回 (ok, login_ms, viewer_ms, first_frame_ms)。"""
+        r_login = 0.0
+        r_viewer = 0.0
+        r_first = 0.0
+        # ---- 1. 登录 ----
+        login_url = self.base_url + self.login_api_path
+        login_body = json.dumps({"name": account, "password": pwd_hash})
+        t_req = time.perf_counter()
+        st.login_ts = time.time()
+        await self._emit_req(user_id, account, "POST", login_url, "登录")
+        try:
+            resp = await client.post(login_url, content=login_body,
+                                     headers={"Content-Type": "application/json"})
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            st.login_ms = elapsed
+            r_login = elapsed
+            data = resp.json()
+            if data.get("code") == 10000:
+                st.session_token = resp.cookies.get("token", "")
+                st.user_id_server = str(data.get("data", {}).get("userId", ""))
+                st.viewer_ts = time.time()
+                await self._emit_resp(user_id, account, resp.status_code,
+                                      login_url, "登录", elapsed,
+                                      size=len(resp.content))
+                self.emit({"type": "login_ok", "user_id": user_id,
+                           "account": account, "login_ms": elapsed,
+                           "session_token": st.session_token,
+                           "ts": time.time()})
+                st.status = "viewer"
+                self.emit({"type": "user_status", "user_id": user_id,
+                           "account": account, "status": "viewer",
+                           "ts": time.time()})
             else:
-                st.status = "timeout"
-            self.emit({"type": "user_done", "user_id": user_id,
-                       "account": account, "frames_loaded": st.frames_loaded,
-                       "total_frames": st.total_frames,
-                       "all_frames_ms": st.all_frames_ms,
-                       "round_times": st.round_times,
-                       "status": st.status, "ts": time.time()})
+                await self._emit_resp(user_id, account, resp.status_code,
+                                      login_url, "登录", elapsed,
+                                      size=len(resp.content))
+                st.status = "error"
+                st.error = "登录失败"
+                self.emit({"type": "user_status", "user_id": user_id,
+                           "account": account, "status": "error",
+                           "error": st.error, "ts": time.time()})
+                return (False, r_login, r_viewer, r_first, 0)
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, login_url, "登录",
+                                  elapsed, f"{type(e).__name__}: {e}")
+            st.status = "error"
+            st.error = f"{type(e).__name__}: {e}"
+            self.emit({"type": "user_status", "user_id": user_id,
+                       "account": account, "status": "error",
+                       "error": st.error, "ts": time.time()})
+            return (False, r_login, r_viewer, r_first, 0)
+
+        # ---- 2. 会话校验 ----
+        check_url = self.base_url + self.check_login_prefix
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "GET", check_url, "会话校验")
+        try:
+            resp = await client.get(check_url)
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  check_url, "会话校验", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, check_url, "会话校验",
+                                  elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 2.5 消息令牌 ----
+        msg_token_url = self.base_url + self.msg_token_prefix
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "GET", msg_token_url, "消息令牌")
+        try:
+            resp = await client.get(msg_token_url)
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  msg_token_url, "消息令牌", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, msg_token_url,
+                                  "消息令牌", elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 2.8 检查列表 ----
+        checklist_url = self.base_url + self.checklist_api_path
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "POST", checklist_url, "检查列表")
+        try:
+            resp = await client.post(
+                checklist_url,
+                json={"order_by": [{"studyDate": "desc"}],
+                      "page": {"no": 1, "length": 100}})
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  checklist_url, "检查列表", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, checklist_url,
+                                  "检查列表", elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 3. 图像元数据 ----
+        studies_url = (self.base_url + self.studies_api_path +
+                       f"?studyInstanceUID={self.study_uid}&taskType=xa_brain&product=XA_BRAIN")
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "GET", studies_url, "图像元数据")
+        series_uids: list[str] = []
+        try:
+            resp = await client.get(studies_url)
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            try:
+                data = resp.json()
+                total = 0
+                for study in data.get("data", []):
+                    for series in study.get("series", []):
+                        total += int(series.get("imgFrameNumber", 0))
+                        suid = series.get("seriesInstanceUID")
+                        if suid:
+                            series_uids.append(suid)
+                if total > 0:
+                    st.total_frames = total
+                    self.emit({"type": "total_frames", "user_id": user_id,
+                               "account": account, "total_frames": total,
+                               "ts": time.time()})
+            except Exception:
+                pass
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  studies_url, "图像元数据", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, studies_url,
+                                  "图像元数据", elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 4. 序列数据 ----
+        series_uid = (self.series_uid if self.series_uid in series_uids
+                      else (series_uids[0] if series_uids else self.series_uid))
+        dcp_url = self.base_url + self.dcp_api_path_template.format(
+            series_uid=series_uid)
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "GET", dcp_url, "序列数据")
+        frame_urls = []
+        try:
+            resp = await client.get(dcp_url)
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            try:
+                images = resp.json().get("images", [])
+                frame_urls = [f"{self.base_url}/{img['storagePath']}"
+                              for img in images]
+                if st.total_frames <= 0 and frame_urls:
+                    st.total_frames = len(frame_urls)
+                    self.emit({"type": "total_frames", "user_id": user_id,
+                               "account": account,
+                               "total_frames": st.total_frames,
+                               "ts": time.time()})
+            except Exception:
+                pass
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  dcp_url, "序列数据", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, dcp_url, "序列数据",
+                                  elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 5. 缩略图 ----
+        thumb_url = f"{self.base_url}{self.thumbnail_prefix}/{series_uid}/thumbnail.jpg"
+        t_req = time.perf_counter()
+        await self._emit_req(user_id, account, "GET", thumb_url, "缩略图")
+        try:
+            resp = await client.get(thumb_url)
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, resp.status_code,
+                                  thumb_url, "缩略图", elapsed,
+                                  size=len(resp.content))
+        except Exception as e:
+            elapsed = round((time.perf_counter() - t_req) * 1000, 1)
+            await self._emit_resp(user_id, account, 0, thumb_url, "缩略图",
+                                  elapsed, f"{type(e).__name__}: {e}")
+
+        # ---- 6. 图像帧 ----
+        r_viewer = round((time.perf_counter() - t_req) * 1000, 1) if st.viewer_ts else 0
+        st.viewer_ms = r_viewer
+        st.status = "loading"
+        self.emit({"type": "user_status", "user_id": user_id,
+                   "account": account, "status": "loading", "ts": time.time()})
+        if not frame_urls:
+            st.status = "timeout"
+            return (True, r_login, r_viewer, r_first, 0)
+
+        set_size = st.total_frames if st.total_frames > 0 else len(frame_urls)
+        st.frames_loaded = 0
+        st.first_frame_ts = 0.0
+        st.first_frame_ms = 0.0
+        round_t0_frames = time.perf_counter()
+        await self._download_frames(user_id, account, frame_urls, set_size,
+                                    client, st, round_t0_frames, round_idx=round_idx + 1)
+        r_first = st.first_frame_ms
+        r_frames = round((time.perf_counter() - round_t0_frames) * 1000, 1)
+        return (True, r_login, r_viewer, r_first, r_frames)
 
     def _snapshot(self) -> list[dict]:
         return [
@@ -736,6 +795,10 @@ class TestEngine:
                 "frames_loaded": s.frames_loaded,
                 "total_frames": s.total_frames,
                 "round_times": list(s.round_times),
+                "round_login_ms": list(s.round_login_ms),
+                "round_viewer_ms": list(s.round_viewer_ms),
+                "round_first_frame_ms": list(s.round_first_frame_ms),
+                "round_frame_ms": list(s.round_frame_ms),
                 "session_token": s.session_token,
                 "user_id_server": s.user_id_server,
                 "login_ts": round(s.login_ts, 3),
