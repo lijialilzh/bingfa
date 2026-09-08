@@ -914,11 +914,14 @@ async def record_vnc_start(payload: dict) -> dict:
         return {"ok": False, "msg": "缺少 url"}
     # 检查 VNC 依赖（仅 Linux 服务器支持）
     import shutil
+    import importlib.util
     missing = []
-    for cmd, name in (("Xvfb", "xvfb"), ("x11vnc", "x11vnc"),
-                      ("websockify", "websockify")):
+    for cmd, name in (("Xvfb", "xvfb"), ("x11vnc", "x11vnc")):
         if shutil.which(cmd) is None:
             missing.append(name)
+    # websockify 用 python -m 方式启动，检查模块是否可导入
+    if importlib.util.find_spec("websockify") is None:
+        missing.append("websockify")
     if missing:
         return {"ok": False,
                 "msg": f"服务器缺少 VNC 依赖（{', '.join(missing)}），"

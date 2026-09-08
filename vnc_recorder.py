@@ -23,6 +23,7 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from typing import Callable, Optional
@@ -93,10 +94,12 @@ class VNCRecorder:
 
     def _start_websockify(self) -> None:
         """启动 websockify，把 VNC 桥接为 WebSocket。"""
-        if shutil.which("websockify") is None:
+        import importlib.util
+        if importlib.util.find_spec("websockify") is None:
             raise RuntimeError("未安装 websockify，请执行：pip install websockify")
+        # 用当前 Python 解释器以模块方式启动，避免依赖 PATH 中的 websockify 可执行文件
         self._websockify_proc = subprocess.Popen(
-            ["websockify", str(self.ws_port),
+            [sys.executable, "-m", "websockify", str(self.ws_port),
              f"127.0.0.1:{self.vnc_port}"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
