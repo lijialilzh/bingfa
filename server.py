@@ -28,7 +28,10 @@ from ui_test import UITestRunner, parse_excel_cases
 from vnc_recorder import VNCRecorder
 from browser_concurrency import BrowserConcurrencyRunner
 
-app = FastAPI(title="测试平台")
+app = FastAPI(title="测试平台", version="1.0.0")
+
+# 项目版本号（首次发布）
+APP_VERSION = "1.0.0"
 
 # noVNC 静态文件（网页端显示浏览器画面）
 NOVNC_DIR = Path(__file__).parent / "novnc"
@@ -164,8 +167,8 @@ async def auth_middleware(request: Request, call_next):
     """认证中间件：除登录接口和静态资源外，所有请求需携带有效 token。"""
     path = request.url.path
     # 放行登录接口、根路径、noVNC 静态文件（iframe 无法带 token）
-    if path in ("/api/login", "/api/logout", "/") or path.startswith("/static") \
-            or path.startswith("/novnc"):
+    if path in ("/api/login", "/api/logout", "/api/version", "/") \
+            or path.startswith("/static") or path.startswith("/novnc"):
         return await call_next(request)
     # 检查 token（支持 header 或 query 参数）
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
@@ -204,7 +207,16 @@ async def logout(request: Request) -> dict:
 @app.get("/", response_class=HTMLResponse)
 async def index() -> str:
     html = Path(__file__).parent / "index.html"
-    return html.read_text(encoding="utf-8")
+    content = html.read_text(encoding="utf-8")
+    # 注入版本号
+    content = content.replace("{{APP_VERSION}}", APP_VERSION)
+    return content
+
+
+@app.get("/api/version")
+async def get_version() -> dict:
+    """返回项目版本号。"""
+    return {"ok": True, "version": APP_VERSION}
 
 
 @app.post("/api/proxy")

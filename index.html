@@ -375,7 +375,7 @@
 <div class="login-mask" id="loginMask">
   <div class="login-box">
     <h1>测试平台</h1>
-    <div class="login-sub">请登录后使用</div>
+    <div class="login-sub">请登录后使用 · v{{APP_VERSION}}</div>
     <div class="field">
       <label>用户名</label>
       <input id="loginUser" placeholder="master" autocomplete="username">
@@ -404,7 +404,7 @@
 <div class="layout">
   <div class="sidebar">
     <div class="logo-row">
-      <div class="logo">测试平台</div>
+      <div class="logo">测试平台 <span style="font-size:11px;color:var(--muted);font-weight:400">v{{APP_VERSION}}</span></div>
     </div>
     <a class="nav-item active" data-tab="single" onclick="switchTab('single')">单接口测试</a>
     <a class="nav-item" data-tab="multi" onclick="switchTab('multi')">多接口测试</a>
