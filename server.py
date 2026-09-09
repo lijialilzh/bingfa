@@ -43,10 +43,39 @@ if NOVNC_DIR.exists():
 AUTH_USERS = {
     "master": "Tuixiang2026",
 }
-# 已登录的 token 集合（内存中，重启后失效）
+# 已登录的 token 集合（持久化到磁盘，重启后仍有效）
 auth_tokens: Set[str] = set()
 TOKEN_TTL = 24 * 3600  # token 有效期 24 小时
 _token_created: Dict[str, float] = {}
+AUTH_FILE = Path(__file__).parent / "auth_tokens.json"
+
+
+def _load_auth_tokens() -> None:
+    """从磁盘加载已登录的 token（重启后保持登录状态）。"""
+    global auth_tokens, _token_created
+    if AUTH_FILE.exists():
+        try:
+            data = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+            for token, created in (data.get("tokens") or {}).items():
+                # 过期 token 不加载
+                if time.time() - created <= TOKEN_TTL:
+                    auth_tokens.add(token)
+                    _token_created[token] = created
+        except Exception:
+            pass
+
+
+def _save_auth_tokens() -> None:
+    """把当前 token 持久化到磁盘。"""
+    try:
+        AUTH_FILE.write_text(
+            json.dumps({"tokens": _token_created}, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+    except Exception:
+        pass
+
+
+_load_auth_tokens()
 
 # 全局状态
 engine: Optional[TestEngine] = None
@@ -79,6 +108,7 @@ browser_task: Optional[asyncio.Task] = None
 
 CONFIG_FILE = Path(__file__).parent / "config.json"
 SAVED_FILE = Path(__file__).parent / "saved_tests.json"
+AUTO_ACCOUNTS_FILE = Path(__file__).parent / "auto_accounts.json"
 UPLOAD_DIR = Path(__file__).parent / "uploads"   # 上传文件保存目录
 UPLOAD_DIR.mkdir(exist_ok=True)
 
@@ -113,6 +143,21 @@ def load_saved_tests() -> dict:
 def save_saved_tests(data: dict) -> None:
     SAVED_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2),
                           encoding="utf-8")
+
+
+def load_auto_accounts() -> dict:
+    """从 auto_accounts.json 读取按 IP 绑定的账号配置。"""
+    if AUTO_ACCOUNTS_FILE.exists():
+        try:
+            return json.loads(AUTO_ACCOUNTS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {}
+
+
+def save_auto_accounts(data: dict) -> None:
+    AUTO_ACCOUNTS_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2),
+                                  encoding="utf-8")
 
 
 def broadcast(event: dict) -> None:
@@ -190,6 +235,7 @@ async def login(payload: dict) -> dict:
     token = secrets.token_hex(32)
     auth_tokens.add(token)
     _token_created[token] = time.time()
+    _save_auth_tokens()
     return {"ok": True, "msg": "登录成功", "token": token, "username": username}
 
 
@@ -201,6 +247,7 @@ async def logout(request: Request) -> dict:
         token = request.query_params.get("token", "")
     auth_tokens.discard(token)
     _token_created.pop(token, None)
+    _save_auth_tokens()
     return {"ok": True, "msg": "已退出登录"}
 
 
@@ -1188,6 +1235,25 @@ async def ui_test_stop() -> dict:
     if ui_runner:
         ui_runner.stop()
     return {"ok": True, "msg": "已请求停止"}
+
+
+@app.get("/api/ui-test/accounts")
+async def ui_test_get_accounts(request: Request) -> dict:
+    """按客户端 IP 返回保存的账号配置。"""
+    ip = request.client.host if request.client else "unknown"
+    data = load_auto_accounts()
+    return {"ok": True, "ip": ip, "accounts": data.get(ip, [])}
+
+
+@app.post("/api/ui-test/accounts")
+async def ui_test_save_accounts(request: Request, payload: dict) -> dict:
+    """按客户端 IP 保存账号配置。"""
+    ip = request.client.host if request.client else "unknown"
+    accounts = payload.get("accounts") or []
+    data = load_auto_accounts()
+    data[ip] = accounts
+    save_auto_accounts(data)
+    return {"ok": True, "msg": "已保存", "ip": ip}
 
 
 @app.get("/api/ui-test/status")

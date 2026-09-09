@@ -13,6 +13,12 @@ saved_tests.json
 # 本地配置（每台机器不同，不入库；模板见 config.example.json）
 config.json
 
+# 登录 token（持久化，不入库）
+auth_tokens.json
+
+# 自动化测试账号配置（按 IP 绑定，不入库）
+auto_accounts.json
+
 # 上传文件（大文件，不入库）
 uploads/
 *.zip

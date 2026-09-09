@@ -351,6 +351,9 @@
     width: 100%; padding: 10px; font-size: 15px; margin-top: 6px;
   }
   .login-box .login-err { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px; }
+  .login-box .login-version {
+    color: var(--muted); font-size: 12px; margin-top: 16px; text-align: center;
+  }
   .pwd-wrap { position: relative; }
   .pwd-wrap input { padding-right: 40px; }
   .login-box .pwd-toggle {
@@ -375,7 +378,6 @@
 <div class="login-mask" id="loginMask">
   <div class="login-box">
     <h1>测试平台</h1>
-    <div class="login-sub">请登录后使用 · v{{APP_VERSION}}</div>
     <div class="field">
       <label>用户名</label>
       <input id="loginUser" placeholder="master" autocomplete="username">
@@ -398,6 +400,7 @@
     </div>
     <button onclick="doLogin()">登 录</button>
     <div class="login-err" id="loginErr"></div>
+    <div class="login-version">v{{APP_VERSION}}</div>
   </div>
 </div>
 
@@ -842,7 +845,11 @@
           <div class="field" style="flex:1">
             <label>账号配置（用例步骤里写「超级管理员登录」等，自动用对应账号登录）</label>
             <div id="autoAccounts"></div>
-            <button class="btn2" onclick="addAccountRow()" style="margin-top:8px">+ 添加账号</button>
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button class="btn2" onclick="addAccountRow()">+ 添加账号</button>
+              <button class="btn2" onclick="saveAutoAccounts()">保存账号</button>
+              <span id="autoAccountsStatus" style="font-size:12px;color:var(--muted)"></span>
+            </div>
           </div>
         </div>
         <div class="row">
@@ -852,9 +859,49 @@
             <div class="hint">操作步骤单元格内可用换行写多个步骤，如：<br>超级管理员登录<br>点击 用户管理<br>验证 页面包含 用户列表</div>
           </div>
         </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>快速执行（无需用例，直接输入步骤执行）</label>
+            <textarea id="quickSteps" placeholder="操作步骤，每行一步，如：&#10;超级管理员登录&#10;点击 用户管理&#10;验证 页面包含 用户列表" style="min-height:100px"></textarea>
+            <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
+              <input id="quickExpect" placeholder="预期结果（可选），如：页面包含 用户列表" style="flex:1">
+              <select id="quickAccount" style="width:180px">
+                <option value="">使用步骤里的登录角色</option>
+                <option value="__all__">遍历所有账号</option>
+              </select>
+              <button onclick="runQuickTest()">快速执行</button>
+            </div>
+          </div>
+        </div>
+        <div class="row" style="border-top:1px solid var(--border);padding-top:12px">
+          <div class="field" style="flex:1">
+            <label>手动添加用例（不依赖 Excel）</label>
+            <div style="display:grid;grid-template-columns:100px 1fr 1fr;gap:8px;margin-bottom:8px">
+              <input id="manualCaseId" placeholder="用例号">
+              <input id="manualCaseName" placeholder="功能模块">
+              <input id="manualCasePre" placeholder="前置条件（可选）">
+            </div>
+            <textarea id="manualCaseSteps" placeholder="操作步骤，每行一步，如：&#10;超级管理员登录&#10;点击 用户管理&#10;验证 页面包含 用户列表" style="min-height:80px"></textarea>
+            <input id="manualCaseExpect" placeholder="预期结果，如：页面包含 用户列表" style="margin-top:8px">
+            <div style="margin-top:8px;display:flex;gap:8px">
+              <button class="btn2" onclick="addManualCase()">添加用例</button>
+              <button class="btn2" onclick="clearManualForm()">清空</button>
+            </div>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label style="display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="autoMultiAccount" style="width:auto">
+              多账号遍历（每条用例用所有配置的账号各执行一遍）
+            </label>
+          </div>
+        </div>
         <div class="row">
           <button onclick="runAutoTest()">执行全部用例</button>
+          <button class="btn2" onclick="runSelectedCases()">执行选中用例</button>
           <button id="btnUiStop" class="stop" onclick="stopUiTest()" disabled>停止</button>
+          <button class="btn2" onclick="saveModule('auto')">保存执行记录</button>
           <span id="autoStatus" style="font-size:13px;color:var(--muted)"></span>
         </div>
       </div>
@@ -974,6 +1021,7 @@ function initAfterLogin() {
   if (hint) hint.textContent = location.origin;
   loadRecordedRequests();
   loadUploadFiles();
+  loadAutoAccounts();
 }
 
 // 页面加载时：有 token 则尝试直接进入，否则显示登录框
@@ -1133,6 +1181,7 @@ function collectAuto() {
     headless: document.getElementById("autoHeadless").checked,
     step_interval: document.getElementById("autoStepInterval").value,
     accounts: collectAccounts(),
+    cases: uiCases,  // 保存用例，加载时可重新执行
   };
 }
 
@@ -1152,6 +1201,12 @@ function applyAuto(d) {
   } else {
     addAccountRow();
   }
+  // 回填用例列表
+  if (d.cases && d.cases.length) {
+    uiCases = d.cases;
+    renderCaseList();
+    document.getElementById("autoStatus").textContent = `已加载 ${uiCases.length} 条用例`;
+  }
 }
 
 // 添加账号行
@@ -1161,11 +1216,12 @@ function addAccountRow(acc) {
   const row = document.createElement("div");
   row.className = "account-row";
   row.innerHTML = `
-    <input class="acc-role" placeholder="角色名，如 超级管理员" value="${escapeHtml(acc.role || "")}">
+    <input class="acc-role" placeholder="角色名，如 超级管理员" value="${escapeHtml(acc.role || "")}" onchange="updateQuickAccountOptions()">
     <input class="acc-name" placeholder="账号" value="${escapeHtml(acc.account || "")}">
     <input class="acc-pwd" placeholder="密码" value="${escapeHtml(acc.password || "")}">
-    <button class="acc-del" onclick="this.parentElement.remove()">删除</button>`;
+    <button class="acc-del" onclick="this.parentElement.remove();updateQuickAccountOptions()">删除</button>`;
   list.appendChild(row);
+  updateQuickAccountOptions();
 }
 
 // 收集账号列表
@@ -1178,6 +1234,137 @@ function collectAccounts() {
     if (role && account) accounts.push({ role, account, password });
   });
   return accounts;
+}
+
+// 更新快速执行下拉框的账号选项
+function updateQuickAccountOptions() {
+  const sel = document.getElementById("quickAccount");
+  if (!sel) return;
+  const accounts = collectAccounts();
+  const prev = sel.value;
+  let html = `<option value="">使用步骤里的登录角色</option>`;
+  if (accounts.length > 1) {
+    html += `<option value="__all__">遍历所有账号</option>`;
+  }
+  for (const a of accounts) {
+    html += `<option value="${escapeHtml(a.role)}">${escapeHtml(a.role)}（${escapeHtml(a.account)}）</option>`;
+  }
+  sel.innerHTML = html;
+  if (prev) sel.value = prev;
+}
+
+// 快速执行：无需用例，直接输入步骤执行
+async function runQuickTest() {
+  const stepsText = document.getElementById("quickSteps").value.trim();
+  if (!stepsText) { showToast("请输入操作步骤", true); return; }
+  const expect = document.getElementById("quickExpect").value.trim();
+  const accountChoice = document.getElementById("quickAccount").value;
+  const accounts = collectAccounts();
+
+  // 按行拆分
+  const lines = stepsText.split("\n").map(s => s.trim()).filter(s => s);
+
+  // 解析每行：支持「1. 名称：步骤 → 步骤 → 步骤」或「角色登录 → 步骤 → 步骤」
+  const parsedLines = lines.map(line => {
+    // 去掉行首编号：1. 2. 3. / 1、2、3、 / 1) 2)
+    let l = line.replace(/^\d+[\.、\)）]\s*/, "").trim();
+    // 去掉「名称：」前缀（如「快速执行（超级管理员）：」）
+    l = l.replace(/^[^：:]{0,30}[：:]\s*/, "").trim();
+    // 按箭头/短横线拆分步骤
+    const steps = l.split(/\s*(?:→|->|-->|—|－)\s*/).map(s => s.trim()).filter(s => s);
+    return steps;
+  });
+
+  // 提取所有登录步骤和功能步骤
+  const loginSteps = [];
+  const actionSteps = [];
+  for (const steps of parsedLines) {
+    for (const s of steps) {
+      if (/登录$/.test(s)) loginSteps.push(s);
+      else actionSteps.push(s);
+    }
+  }
+
+  // 若只写了登录角色、没有功能步骤，自动加「自动探索」步骤
+  const finalActions = actionSteps.length ? actionSteps : ["自动探索所有功能"];
+
+  // 构建用例列表
+  let cases = [];
+  if (accountChoice === "__all__") {
+    // 遍历所有账号：每个账号执行一遍所有功能步骤
+    for (const acc of accounts) {
+      cases.push({
+        id: "", name: `快速执行（${acc.role}）`,
+        steps: [`${acc.role}登录`, ...finalActions], expect,
+      });
+    }
+  } else if (accountChoice) {
+    // 指定账号：用该账号登录后执行所有功能步骤
+    cases.push({
+      id: "", name: `快速执行（${accountChoice}）`,
+      steps: [`${accountChoice}登录`, ...finalActions], expect,
+    });
+  } else if (loginSteps.length > 1) {
+    // 多个「XX登录」：每个角色登录后分别执行所有功能步骤
+    for (const login of loginSteps) {
+      const role = login.replace(/登录$/, "").trim();
+      cases.push({
+        id: "", name: `快速执行（${role}）`,
+        steps: [login, ...finalActions], expect,
+      });
+    }
+  } else if (loginSteps.length === 1) {
+    // 单个登录角色
+    cases.push({
+      id: "", name: `快速执行（${loginSteps[0].replace(/登录$/, "").trim()}）`,
+      steps: [loginSteps[0], ...finalActions], expect,
+    });
+  } else {
+    // 无登录步骤：直接执行
+    cases.push({ id: "", name: "快速执行", steps: finalActions, expect });
+  }
+
+  await runAutoTest(cases);
+}
+
+// 保存账号配置（按 IP 绑定）
+async function saveAutoAccounts() {
+  const accounts = collectAccounts();
+  const statusEl = document.getElementById("autoAccountsStatus");
+  try {
+    const res = await apiFetch("/api/ui-test/accounts", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accounts })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      statusEl.textContent = "已保存";
+      setTimeout(() => statusEl.textContent = "", 2000);
+    } else {
+      showToast(data.msg || "保存失败", true);
+    }
+  } catch (e) {
+    showToast("保存失败：" + e, true);
+  }
+}
+
+// 加载账号配置（按 IP 绑定）
+async function loadAutoAccounts() {
+  try {
+    const res = await apiFetch("/api/ui-test/accounts");
+    const data = await res.json();
+    if (!data.ok) return;
+    const accounts = data.accounts || [];
+    const list = document.getElementById("autoAccounts");
+    list.innerHTML = "";
+    if (accounts.length) {
+      for (const a of accounts) addAccountRow(a);
+    } else {
+      addAccountRow();
+    }
+  } catch (e) {
+    // 忽略加载失败
+  }
 }
 
 const MODULE_COLLECTORS = {
@@ -1458,9 +1645,14 @@ function summarizeRecord(module, d) {
 }
 
 // 应用某条历史记录到表单
-function applyHistoryRecord(module, data) {
+async function applyHistoryRecord(module, data) {
   const apply = MODULE_APPLIERS[module];
   if (!apply) return;
+  // 若测试页面有当前执行记录（自动化测试有已上传用例），弹窗确认后才覆盖
+  if (module === "auto" && uiCases && uiCases.length) {
+    const ok = await askConfirm("当前测试页面已有用例，加载历史记录将覆盖当前内容，确定继续？");
+    if (!ok) return;
+  }
   apply(data);
   flashSaved(module, "已加载历史记录");
   // 切回「测试」子 tab，让用户看到回填结果
@@ -1470,7 +1662,7 @@ function applyHistoryRecord(module, data) {
 
 // 删除某条历史记录
 async function deleteHistory(module, recordId) {
-  const ok = await askConfirm("确定删除这条记录？");
+  const ok = await askConfirm("确定删除这条记录？", "删除");
   if (!ok) return;
   try {
     const res = await apiFetch(`/api/saved-tests/${module}/${recordId}`, { method: "DELETE" });
@@ -1486,7 +1678,7 @@ async function deleteHistory(module, recordId) {
 }
 
 // 弹出自定义确认框，返回 true/false
-function askConfirm(text) {
+function askConfirm(text, okText) {
   return new Promise((resolve) => {
     const mask = document.createElement("div");
     mask.className = "modal-mask";
@@ -1495,7 +1687,7 @@ function askConfirm(text) {
         <h3>${escapeHtml(text)}</h3>
         <div class="modal-actions">
           <button class="btn2" id="askConfirmCancel">取消</button>
-          <button class="stop" id="askConfirmOk">删除</button>
+          <button class="stop" id="askConfirmOk">${escapeHtml(okText || "确定")}</button>
         </div>
       </div>`;
     document.body.appendChild(mask);
@@ -1564,45 +1756,201 @@ async function uploadAutoExcel() {
   }
 }
 
-// 渲染用例列表
+// 渲染用例列表（表格形式，可勾选）
 function renderCaseList() {
   const el = document.getElementById("autoCaseList");
   if (!uiCases.length) {
     el.innerHTML = "尚未上传用例";
     return;
   }
-  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px">
+  let html = `<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
     <span>用例总数：<b>${uiCases.length}</b></span>
+    <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+      <input type="checkbox" id="autoSelectAll" onchange="toggleSelectAll()" style="width:auto" checked> 全选
+    </label>
+    <button class="btn2" onclick="unselectAll()" style="padding:2px 10px;font-size:12px">取消多选</button>
   </div>`;
-  for (const c of uiCases) {
-    const steps = (c.steps || []).join("<br>");
-    html += `<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
-      <div style="font-weight:600;margin-bottom:4px">${escapeHtml(c.id ? c.id + " · " : "")}${escapeHtml(c.name)}</div>
-      <div style="font-size:12px;color:var(--muted);margin-bottom:4px">步骤：<br>${escapeHtml(steps)}</div>
-      <div style="font-size:12px;color:var(--yellow)">预期：${escapeHtml(c.expect || "无")}</div>
-    </div>`;
-  }
+  html += `<div style="overflow-x:auto">
+    <table class="summary-table" style="min-width:1200px">
+    <thead><tr>
+      <th style="width:40px">选择</th>
+      <th style="width:80px">用例号</th>
+      <th style="min-width:140px">功能模块</th>
+      <th style="min-width:140px">前置条件</th>
+      <th style="min-width:260px">操作步骤</th>
+      <th style="min-width:160px">预期结果</th>
+      <th style="width:90px">是否通过</th>
+      <th style="min-width:180px">失败原因</th>
+    </tr></thead>
+    <tbody>`;
+  uiCases.forEach((c, i) => {
+    // 每个步骤单独转义并加序号，再用 <br> 连接
+    const steps = (c.steps || []).map((s, idx) => `${idx + 1}. ${escapeHtml(s)}`).join("<br>");
+    // 预期结果：按换行/编号拆分后加序号显示
+    const expectLines = splitExpectLines(c.expect);
+    const expectHtml = expectLines.length
+      ? expectLines.map((s, idx) => `${idx + 1}. ${escapeHtml(s)}`).join("<br>")
+      : "无";
+    // 是否通过状态
+    let passHtml = `<span style="color:var(--muted)">未执行</span>`;
+    if (c._result === "✅ 通过") {
+      passHtml = `<span style="color:var(--green)">✅ 已通过</span>`;
+    } else if (c._result === "❌ 失败") {
+      passHtml = `<span style="color:var(--red)">❌ 失败</span>`;
+    }
+    // 失败原因
+    const failReason = c._result === "❌ 失败" ? (c._failReason || "") : "";
+    html += `<tr>
+      <td style="text-align:center"><input type="checkbox" class="case-check" data-index="${i}" onchange="onCaseCheckChange()" checked style="width:auto"></td>
+      <td>${escapeHtml(c.id || "")}</td>
+      <td>${escapeHtml(c.name || "")}</td>
+      <td style="font-size:12px">${escapeHtml(c.precondition || "无")}</td>
+      <td style="font-size:12px">${steps}</td>
+      <td style="font-size:12px;color:var(--yellow)">${expectHtml}</td>
+      <td style="text-align:center;white-space:nowrap">${passHtml}</td>
+      <td style="font-size:12px;color:var(--red)">${escapeHtml(failReason)}</td>
+    </tr>`;
+  });
+  html += `</tbody></table></div>`;
   el.innerHTML = html;
 }
 
-async function runAutoTest() {
+// 拆分预期结果（按换行/<br>/编号），并去掉每行开头的编号
+function splitExpectLines(text) {
+  if (!text) return [];
+  let t = String(text).replace(/<br\s*\/?>/gi, "\n");
+  const lines = t.split("\n").map(s => s.trim()).filter(s => s);
+  if (lines.length > 1) {
+    // 去掉每行开头的编号（1. 2. 3. / 1、2、3、）
+    return lines.map(s => s.replace(/^\d+[\.、\)）]\s*/, ""));
+  }
+  // 按编号拆分：1. 2. 3. / 1、2、3、
+  const parts = t.split(/(?=\d+[\.、\)）]\s*)/).map(s => s.trim()).filter(s => s);
+  if (parts.length > 1) {
+    return parts.map(p => p.replace(/^\d+[\.、\)）]\s*/, ""));
+  }
+  return [t];
+}
+
+// 全选/取消全选
+function toggleSelectAll() {
+  const checked = document.getElementById("autoSelectAll").checked;
+  document.querySelectorAll(".case-check").forEach(cb => cb.checked = checked);
+}
+
+// 单个用例勾选变化时，同步全选按钮状态
+function onCaseCheckChange() {
+  const all = document.getElementById("autoSelectAll");
+  if (!all) return;
+  const checks = document.querySelectorAll(".case-check");
+  const allChecked = Array.from(checks).every(cb => cb.checked);
+  all.checked = allChecked;
+}
+
+// 取消多选（全部取消勾选）
+function unselectAll() {
+  document.querySelectorAll(".case-check").forEach(cb => cb.checked = false);
+  const all = document.getElementById("autoSelectAll");
+  if (all) all.checked = false;
+}
+
+// 获取勾选的用例
+function getSelectedCases() {
+  const selected = [];
+  document.querySelectorAll(".case-check").forEach(cb => {
+    if (cb.checked) {
+      const idx = parseInt(cb.dataset.index);
+      if (uiCases[idx]) selected.push(uiCases[idx]);
+    }
+  });
+  return selected;
+}
+
+// 手动添加用例
+function addManualCase() {
+  const id = document.getElementById("manualCaseId").value.trim();
+  const name = document.getElementById("manualCaseName").value.trim();
+  const pre = document.getElementById("manualCasePre").value.trim();
+  const stepsText = document.getElementById("manualCaseSteps").value.trim();
+  const expect = document.getElementById("manualCaseExpect").value.trim();
+  if (!stepsText) { showToast("请填写操作步骤", true); return; }
+  // 步骤按换行拆分
+  const steps = stepsText.split("\n").map(s => s.trim()).filter(s => s);
+  uiCases.push({
+    id: id || `手动${uiCases.length + 1}`,
+    name: name || "手动用例",
+    precondition: pre,
+    steps: steps,
+    expect: expect,
+  });
+  renderCaseList();
+  document.getElementById("autoStatus").textContent = `已添加，共 ${uiCases.length} 条用例`;
+  clearManualForm();
+}
+
+// 清空手动添加表单
+function clearManualForm() {
+  document.getElementById("manualCaseId").value = "";
+  document.getElementById("manualCaseName").value = "";
+  document.getElementById("manualCasePre").value = "";
+  document.getElementById("manualCaseSteps").value = "";
+  document.getElementById("manualCaseExpect").value = "";
+}
+
+// 执行选中的用例
+async function runSelectedCases() {
+  const selected = getSelectedCases();
+  if (!selected.length) { showToast("请先勾选要执行的用例", true); return; }
+  await runAutoTest(selected);
+}
+
+async function runAutoTest(cases) {
   const statusEl = document.getElementById("autoStatus");
   const resultEl = document.getElementById("autoResult");
-  if (!uiCases.length) { showToast("请先上传 Excel 用例", true); return; }
+  let targetCases = cases || uiCases;
+  if (!targetCases.length) { showToast("请先上传 Excel 或手动添加用例", true); return; }
+  // 多账号遍历：每条用例用所有账号各执行一遍
+  const multiAccount = document.getElementById("autoMultiAccount").checked;
+  const accounts = collectAccounts();
+  if (multiAccount && accounts.length > 1) {
+    const expanded = [];
+    for (const c of targetCases) {
+      for (const acc of accounts) {
+        // 自动在步骤开头插入对应角色的登录步骤（若原步骤已有登录则替换）
+        let steps = [...(c.steps || [])];
+        const loginIdx = steps.findIndex(s => /登录$/.test(s.trim()));
+        const loginStep = `${acc.role}登录`;
+        if (loginIdx >= 0) {
+          steps[loginIdx] = loginStep;
+        } else {
+          steps = [loginStep, ...steps];
+        }
+        expanded.push({
+          ...c,
+          name: `${c.name}（${acc.role}）`,
+          steps: steps,
+        });
+      }
+    }
+    targetCases = expanded;
+  }
   statusEl.textContent = "执行中…";
   resultEl.innerHTML = "";
   window._uiResults = [];
+  // 清空所有用例的通过状态和失败原因
+  uiCases.forEach(c => { c._result = null; c._failReason = ""; });
+  renderCaseList();
   document.getElementById("btnUiStop").disabled = false;
   const payload = {
     base_url: document.getElementById("autoBaseUrl").value.trim(),
     login_url: document.getElementById("autoLoginUrl").value.trim(),
     headless: document.getElementById("autoHeadless").checked,
     step_interval: parseFloat(document.getElementById("autoStepInterval").value) || 0.5,
-    accounts: collectAccounts().reduce((m, a) => {
+    accounts: accounts.reduce((m, a) => {
       m[a.role] = { account: a.account, password: a.password };
       return m;
     }, {}),
-    cases: uiCases,
+    cases: targetCases,
   };
   try {
     const res = await apiFetch("/api/ui-test/start", {
@@ -2648,6 +2996,15 @@ function handleEvent(ev) {
     if (!window._uiResults) window._uiResults = [];
     window._uiResults.push(ev.result);
     renderUiResults(window._uiResults);
+    // 更新用例列表里对应用例的通过状态
+    if (ev.result) {
+      const target = uiCases.find(c => (c.id && c.id === ev.result.id) || c.name === ev.result.name);
+      if (target) {
+        target._result = ev.result.结果;
+        target._failReason = ev.result.结果 === "❌ 失败" ? (ev.result.实际 || "") : "";
+        renderCaseList();
+      }
+    }
     const statusEl = document.getElementById("autoStatus");
     if (statusEl) statusEl.textContent = `执行中…（${ev.index + 1}/${ev.total}）`;
   }
@@ -2655,6 +3012,15 @@ function handleEvent(ev) {
     // UI 测试：全部完成
     window._uiResults = ev.results || [];
     renderUiResults(window._uiResults);
+    // 更新所有用例的通过状态
+    for (const r of window._uiResults) {
+      const target = uiCases.find(c => (c.id && c.id === r.id) || c.name === r.name);
+      if (target) {
+        target._result = r.结果;
+        target._failReason = r.结果 === "❌ 失败" ? (r.实际 || "") : "";
+      }
+    }
+    renderCaseList();
     const statusEl = document.getElementById("autoStatus");
     const passed = window._uiResults.filter(x => x.结果 === "✅ 通过").length;
     if (statusEl) statusEl.textContent = `完成：${passed}/${window._uiResults.length} 条通过`;
